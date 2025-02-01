@@ -42,12 +42,21 @@ class SubscribesInterface(ABC):
 
 
 class SubscribesMixin(SubscribesInterface, ABC):
-    """Класс-миксин для работы с подписками."""
+    """
+    Класс-миксин для работы с подписками.
+
+    :param keep_alive_request_id: ID для запроса на поддержание активности.
+    """
 
     _keep_alive_task: asyncio.Task | None = None
+    """Задача по отправке сообщений на поддержание активности."""
     _subscriptions_task: asyncio.Task | None = None
+    """Задача по обработке подписок."""
+    _events_task: asyncio.Task | None = None
+    """Задача по обработке событий."""
     __subscribe_active: bool = False
     __requests_queue: asyncio.Queue[Message] = asyncio.Queue()
+    __events_queue: asyncio.Queue[Event] = asyncio.Queue()
     __for_comparison = (
         OrderEvent(),
         TradeEvent(),
@@ -177,23 +186,35 @@ class SubscribesMixin(SubscribesInterface, ABC):
             self._subscription_handler()
         )
         self._keep_alive_task = asyncio.create_task(self._keep_alive_handler())
+        self._events_task = asyncio.create_task(self._events_handler())
         self.__subscribe_active = True
 
     def _cancel_tasks(self) -> None:
         """Отмена фоновых задач."""
         ka_res = None
-        sw_res = None
+        s_res = None
+        e_res = None
         if self._keep_alive_task:
             ka_res = self._keep_alive_task.cancel()
         if self._subscriptions_task:
-            sw_res = self._subscriptions_task.cancel()
+            s_res = self._subscriptions_task.cancel()
+        if self._events_task:
+            e_res = self._events_task.cancel()
         self.logger.debug(
             "Поддержание активности отменено: %s, "
-            "обработка подписок отменена: %s.",
+            "обработка подписок отменена: %s, "
+            "обработка событий отменена: %s.",
             ka_res,
-            sw_res,
+            s_res,
+            e_res,
         )
         self.__subscribe_active = False
+
+    async def _events_handler(self) -> None:
+        """Обработка событий."""
+        while True:
+            event = await self.__events_queue.get()
+            await self.on_event(event)
 
     async def _keep_alive_handler(self) -> None:
         """Поддержание активности."""
@@ -227,7 +248,7 @@ class SubscribesMixin(SubscribesInterface, ABC):
                 request_iterator=request_iterator(),
                 metadata=self.metadata,  # type: ignore
             ):
-                await self.on_event(event)
+                await self.__events_queue.put(event)
         except RpcError as exc:
             self.logger.warning(
                 "При получении события произошла ошибка: %s.", exc

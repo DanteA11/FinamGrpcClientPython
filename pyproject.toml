@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "finam_grpc_client"
-version = "1.0.0"
+version = "1.0.1"
 readme = "README.md"
 package-mode = false
 
