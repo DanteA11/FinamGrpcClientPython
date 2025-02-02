@@ -85,7 +85,7 @@ class SubscribesMixin(SubscribesInterface, ABC):
 
     async def close(self):
         """Закрывает соединение."""
-        self._cancel_tasks()
+        await self._cancel_tasks()
         await super().close()  # type: ignore
 
     @property
@@ -176,30 +176,39 @@ class SubscribesMixin(SubscribesInterface, ABC):
         elif event.response != self.__for_comparison[4]:
             await self.on_response(event.response)
 
-    def _create_tasks(self) -> None:
+    async def _create_tasks(self) -> None:
         """Запуск фоновых задач."""
         self.logger.debug(
             "Создание задач для обработки "
             "подписок и поддержания активности."
         )
-        self._subscriptions_task = asyncio.create_task(
-            self._subscription_handler()
-        )
-        self._keep_alive_task = asyncio.create_task(self._keep_alive_handler())
-        self._events_task = asyncio.create_task(self._events_handler())
+        if not self._subscriptions_task:
+            self._subscriptions_task = asyncio.create_task(
+                self._subscription_handler()
+            )
+        if not self._keep_alive_task:
+            self._keep_alive_task = asyncio.create_task(
+                self._keep_alive_handler()
+            )
+        if not self._events_task:
+            self._events_task = asyncio.create_task(self._events_handler())
         self.__subscribe_active = True
 
-    def _cancel_tasks(self) -> None:
+    async def _cancel_tasks(self) -> None:
         """Отмена фоновых задач."""
         ka_res = None
         s_res = None
         e_res = None
-        if self._keep_alive_task:
-            ka_res = self._keep_alive_task.cancel()
-        if self._subscriptions_task:
-            s_res = self._subscriptions_task.cancel()
-        if self._events_task:
-            e_res = self._events_task.cancel()
+        ka_task = self._keep_alive_task
+        s_task = self._subscriptions_task
+        e_task = self._events_task
+        if ka_task:
+            ka_res = ka_task.cancel()
+        if s_task:
+            s_res = s_task.cancel()
+        if e_task:
+            e_res = e_task.cancel()
+        await asyncio.gather(ka_task, s_task, e_task, return_exceptions=True)
         self.logger.debug(
             "Поддержание активности отменено: %s, "
             "обработка подписок отменена: %s, "
@@ -208,6 +217,9 @@ class SubscribesMixin(SubscribesInterface, ABC):
             s_res,
             e_res,
         )
+        self._keep_alive_task = None
+        self._subscriptions_task = None
+        self._events_task = None
         self.__subscribe_active = False
 
     async def _events_handler(self) -> None:
@@ -233,7 +245,7 @@ class SubscribesMixin(SubscribesInterface, ABC):
     ) -> None:
         """Добавление подписки в очередь."""
         if not self.__subscribe_active:
-            self._create_tasks()
+            await self._create_tasks()
         await self.__requests_queue.put(request)
 
     async def _subscription_handler(self) -> None:
