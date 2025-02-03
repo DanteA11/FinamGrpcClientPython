@@ -135,9 +135,10 @@ async def test_order_book_several_subscribe_unsubscribe(client):
     assert check_vtb
     assert check_sber
     await asyncio.sleep(5)
-
-    assert len(events_response) == 2  # еще раз проверяю.
+    # При низкой ликвидности могут не прийти события стакана.
+    # Можно прибавить время сна.
     assert len(events_order_book) > 0
+    assert len(events_response) == 2  # еще раз проверяю.
     check_vtb = False
     check_sber = False
     for e in events_order_book:
@@ -274,6 +275,106 @@ async def test_orders_subscribe_unsubscribe(client, client_id):
         await asyncio.sleep(1)
     else:
         assert len(events_order) == 2
+
+    for o in events_order:
+        assert o.transaction_id == new_order.transaction_id
+        assert o.status == OrderStatus.ORDER_STATUS_CANCELLED
+
+    await client.unsubscribe_orders_trades(request_id=request_id)
+
+    for i in range(6):
+        if len(events_response) == 2:
+            break
+        await asyncio.sleep(1)
+    else:
+        assert len(events_response) == 2
+
+    for r in events_response:
+        assert r.request_id == request_id
+        assert r.success is True
+
+
+@pytest.mark.anyio
+async def test_orders_subscribe_unsubscribe_with_condition(client, client_id):
+    events_order: list[OrderEvent] = []
+    events_response: list[ResponseEvent] = []
+
+    async def handler_order(event: OrderEvent):
+        events_order.append(event)
+
+    async def handler_response(event: ResponseEvent):
+        if event.request_id != "keep_alive":
+            events_response.append(event)
+
+    client.on_order = handler_order
+    client.on_response = handler_response
+
+    request_id = "test_4"
+
+    await client.subscribe_orders_trades(
+        request_id=request_id, client_ids=[client_id]
+    )
+
+    for _ in range(6):
+        if events_response:
+            break
+        await asyncio.sleep(1)
+    else:
+        assert False
+    assert len(events_response) == 1
+
+    for r in events_response:
+        assert r.request_id == request_id
+        assert r.success is True
+
+    candles = await client.get_candles(
+        security_board="TQBR",
+        security_code="VTBR",
+        time_frame="M1",
+        count=1,
+        to=datetime.now(),
+    )
+
+    assert isinstance(candles, GetIntradayCandlesResult)
+    high_price_finam = candles.candles[0].high
+    high_price = high_price_finam.num * 10**-high_price_finam.scale
+    price = round(high_price * 0.97, high_price_finam.scale)
+
+    new_order = await client.create_order(
+        client_id=client_id,
+        security_board="TQBR",
+        security_code="VTBR",
+        buy_sell="BUY_SELL_SELL",
+        quantity=1,
+        condition=OrderCondition(
+            type="ORDER_CONDITION_TYPE_LAST_DOWN", price=price
+        ),
+    )
+    assert new_order is not None
+    assert new_order.client_id == client_id
+
+    for _ in range(6):
+        if len(events_order) == 2:  # приходит два уведомления.
+            break
+        await asyncio.sleep(1)
+    else:
+        assert len(events_order) == 2
+
+    for o in events_order:
+        assert o.transaction_id == new_order.transaction_id
+        assert o.status == OrderStatus.ORDER_STATUS_ACTIVE
+
+    events_order.clear()
+
+    await client.cancel_order(
+        client_id=client_id, transaction_id=new_order.transaction_id
+    )
+    for _ in range(6):
+        if len(events_order) == 1:  # приходит одно уведомление.
+            break
+        await asyncio.sleep(1)
+    else:
+        assert len(events_order) == 1
 
     for o in events_order:
         assert o.transaction_id == new_order.transaction_id

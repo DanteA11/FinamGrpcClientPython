@@ -54,6 +54,8 @@ class SubscribesMixin(SubscribesInterface, ABC):
     """Задача по обработке подписок."""
     _events_task: asyncio.Task | None = None
     """Задача по обработке событий."""
+    _background_tasks = set()
+    """Временные фоновые задачи."""
     __subscribe_active: bool = False
     __requests_queue: asyncio.Queue[Message] = asyncio.Queue()
     __events_queue: asyncio.Queue[Event] = asyncio.Queue()
@@ -165,16 +167,21 @@ class SubscribesMixin(SubscribesInterface, ABC):
         :param event: Событие.
         """
         self.logger.info("Пришло событие: %s.", event)
+        task = None
         if event.order != self.__for_comparison[0]:
-            await self.on_order(event.order)
+            task = asyncio.create_task(self.on_order(event.order))
         elif event.trade != self.__for_comparison[1]:
-            await self.on_trade(event.trade)
+            task = asyncio.create_task(self.on_trade(event.trade))
         elif event.order_book != self.__for_comparison[2]:
-            await self.on_order_book(event.order_book)
+            task = asyncio.create_task(self.on_order_book(event.order_book))
         elif event.portfolio != self.__for_comparison[3]:
-            await self.on_portfolio(event.portfolio)
+            task = asyncio.create_task(self.on_portfolio(event.portfolio))
         elif event.response != self.__for_comparison[4]:
-            await self.on_response(event.response)
+            task = asyncio.create_task(self.on_response(event.response))
+        if not task:
+            return
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def _create_tasks(self) -> None:
         """Запуск фоновых задач."""
