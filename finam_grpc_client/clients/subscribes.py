@@ -3,7 +3,7 @@
 import asyncio
 from abc import ABC, abstractmethod
 from logging import Logger
-from typing import Awaitable, Callable
+from typing import Any, Callable, Coroutine, Never
 
 from google.protobuf.message import Message
 from grpc import RpcError
@@ -37,7 +37,7 @@ class SubscribesInterface(ABC):
         """Подписка на стакан."""
 
     @abstractmethod
-    async def unsubscribe_book(self, *args, **kwargs):
+    async def unsubscribe_order_book(self, *args, **kwargs):
         """Отмена подписки на стакан."""
 
 
@@ -54,7 +54,7 @@ class SubscribesMixin(SubscribesInterface, ABC):
     """Задача по обработке подписок."""
     _events_task: asyncio.Task | None = None
     """Задача по обработке событий."""
-    _background_tasks = set()
+    _background_tasks: set[asyncio.Task] = set()
     """Временные фоновые задачи."""
     __subscribe_active: bool = False
     __requests_queue: asyncio.Queue[Message] = asyncio.Queue()
@@ -69,11 +69,11 @@ class SubscribesMixin(SubscribesInterface, ABC):
 
     logger: Logger
     __keep_alive_request_id: str
-    __on_order: Callable[[OrderEvent], Awaitable]
-    __on_trade: Callable[[TradeEvent], Awaitable]
-    __on_order_book: Callable[[OrderBookEvent], Awaitable]
-    __on_portfolio: Callable[[PortfolioEvent], Awaitable]
-    __on_response: Callable[[ResponseEvent], Awaitable]
+    __on_order: Callable[[OrderEvent], Coroutine[Any, Any, Never]]
+    __on_trade: Callable[[TradeEvent], Coroutine[Any, Any, Never]]
+    __on_order_book: Callable[[OrderBookEvent], Coroutine[Any, Any, Never]]
+    __on_portfolio: Callable[[PortfolioEvent], Coroutine[Any, Any, Never]]
+    __on_response: Callable[[ResponseEvent], Coroutine[Any, Any, Never]]
 
     def __init__(self, keep_alive_request_id: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -91,57 +91,67 @@ class SubscribesMixin(SubscribesInterface, ABC):
         await super().close()  # type: ignore
 
     @property
-    def on_order(self) -> Callable[[OrderEvent], Awaitable]:
+    def on_order(self) -> Callable[[OrderEvent], Coroutine[Any, Any, Never]]:
         """Обработчик событий заявок."""
         return self.__on_order
 
     @on_order.setter
-    def on_order(self, handler: Callable[[OrderEvent], Awaitable]) -> None:
+    def on_order(
+        self, handler: Callable[[OrderEvent], Coroutine[Any, Any, Never]]
+    ) -> None:
         """Обработчик событий заявок."""
         self.__on_order = handler
 
     @property
-    def on_trade(self) -> Callable[[TradeEvent], Awaitable]:
+    def on_trade(self) -> Callable[[TradeEvent], Coroutine[Any, Any, Never]]:
         """Обработчик событий сделок."""
         return self.__on_trade
 
     @on_trade.setter
-    def on_trade(self, handler: Callable[[TradeEvent], Awaitable]) -> None:
+    def on_trade(
+        self, handler: Callable[[TradeEvent], Coroutine[Any, Any, Never]]
+    ) -> None:
         """Обработчик событий сделок."""
         self.__on_trade = handler
 
     @property
-    def on_order_book(self) -> Callable[[OrderBookEvent], Awaitable]:
+    def on_order_book(
+        self,
+    ) -> Callable[[OrderBookEvent], Coroutine[Any, Any, Never]]:
         """Обработчик событий стакана."""
         return self.__on_order_book
 
     @on_order_book.setter
     def on_order_book(
-        self, handler: Callable[[OrderBookEvent], Awaitable]
+        self, handler: Callable[[OrderBookEvent], Coroutine[Any, Any, Never]]
     ) -> None:
         """Обработчик событий стакана."""
         self.__on_order_book = handler
 
     @property
-    def on_portfolio(self) -> Callable[[PortfolioEvent], Awaitable]:
+    def on_portfolio(
+        self,
+    ) -> Callable[[PortfolioEvent], Coroutine[Any, Any, Never]]:
         """Обработчик событий портфеля."""
         return self.__on_portfolio
 
     @on_portfolio.setter
     def on_portfolio(
-        self, handler: Callable[[PortfolioEvent], Awaitable]
+        self, handler: Callable[[PortfolioEvent], Coroutine[Any, Any, Never]]
     ) -> None:
         """Обработчик событий портфеля."""
         self.__on_portfolio = handler
 
     @property
-    def on_response(self) -> Callable[[ResponseEvent], Awaitable]:
+    def on_response(
+        self,
+    ) -> Callable[[ResponseEvent], Coroutine[Any, Any, Never]]:
         """Обработчик общих событий."""
         return self.__on_response
 
     @on_response.setter
     def on_response(
-        self, handler: Callable[[ResponseEvent], Awaitable]
+        self, handler: Callable[[ResponseEvent], Coroutine[Any, Any, Never]]
     ) -> None:
         """Обработчик общих событий."""
         self.__on_response = handler
@@ -215,7 +225,11 @@ class SubscribesMixin(SubscribesInterface, ABC):
             s_res = s_task.cancel()
         if e_task:
             e_res = e_task.cancel()
-        await asyncio.gather(ka_task, s_task, e_task, return_exceptions=True)
+        ka_task = ka_task or asyncio.sleep(0)  # type: ignore
+        s_task = s_task or asyncio.sleep(0)  # type: ignore
+        e_task = e_task or asyncio.sleep(0)  # type: ignore
+
+        await asyncio.gather(ka_task, s_task, e_task, return_exceptions=True)  # type: ignore
         self.logger.debug(
             "Поддержание активности отменено: %s, "
             "обработка подписок отменена: %s, "

@@ -61,7 +61,7 @@ async def test_order_book_one_subscribe_unsubscribe(client):
         assert e.security_code == security_code
         assert isinstance(e.bids[0].price, float)
 
-    await client.unsubscribe_book(
+    await client.unsubscribe_order_book(
         request_id=request_id,
         security_board=security_board,
         security_code=security_code,
@@ -152,12 +152,12 @@ async def test_order_book_several_subscribe_unsubscribe(client):
     assert check_sber
 
     await asyncio.gather(
-        client.unsubscribe_book(
+        client.unsubscribe_order_book(
             request_id=request_id,
             security_board=security_board,
             security_code=security_code,
         ),
-        client.unsubscribe_book(
+        client.unsubscribe_order_book(
             request_id=request_id_1,
             security_board=security_board,
             security_code=security_code_1,
@@ -500,7 +500,9 @@ async def test_orders_trades_subscribe_unsubscribe(client, client_id):
             break
         await asyncio.sleep(1)
     else:
-        assert len(events_order) == 3
+        assert (
+            len(events_order) == 3
+        )  # Может не успеть прийти. Лучше прогнать тест отдельно повторно
 
     checks = [False, False, False]
     for i, o in enumerate(events_order):

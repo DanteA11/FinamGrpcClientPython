@@ -610,7 +610,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         request = SubscriptionRequest(order_book_subscribe_request=model)
         await self._execute_subscribe_request(request)
 
-    async def unsubscribe_book(
+    async def unsubscribe_order_book(
         self, request_id: str, security_board: str, security_code: str
     ) -> None:
         """
