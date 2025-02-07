@@ -158,7 +158,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель портфеля.
         """
         self.logger.info(
-            "Метод запущен с параметрами: client_id=%s, "
+            "Запрос информации о портфеле: client_id=%s, "
             "include_currencies=%s, include_money=%s, "
             "include_positions=%s, include_max_buy_sell=%s.",
             client_id,
@@ -195,7 +195,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель инструментов.
         """
         self.logger.info(
-            "Метод запущен с параметрами: board=%s, seccode=%s.",
+            "Запрос информации об инструментах: board=%s, seccode=%s.",
             board,
             seccode,
         )
@@ -228,7 +228,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель ответа на запрос списка ордеров.
         """
         self.logger.info(
-            "Метод запущен с параметрами: client_id=%s, include_active=%s, "
+            "Запрос информации о заявках: client_id=%s, include_active=%s, "
             "include_canceled=%s, include_matched=%s",
             client_id,
             include_active,
@@ -243,7 +243,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         )
         result = await self._execute_request(self._orders.GetOrders, model)
         if result:
-            self.logger.info("Получен список заявок: %s", result)
+            self.logger.info("Получена информация о заяках: %s", result)
         return result
 
     async def create_order(
@@ -321,7 +321,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель ответа на создание нового ордера.
         """
         self.logger.info(
-            "Метод запущен с параметрами: client_id=%s, security_board=%s, "
+            "Создание заявки: client_id=%s, security_board=%s, "
             "security_code=%s, buy_sell=%s, quantity=%s, use_credit=%s, "
             "property=%s, price=%s, condition=%s, valid_before=%s.",
             client_id,
@@ -370,7 +370,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель ответа на отмену ордера.
         """
         self.logger.info(
-            "Метод запущен с параметрами: client_id=%s, transaction_id=%s.",
+            "Отмена заявки: client_id=%s, transaction_id=%s.",
             client_id,
             transaction_id,
         )
@@ -402,7 +402,8 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель ответа на запрос списка стоп-ордеров.
         """
         self.logger.info(
-            "Метод запущен с параметрами: client_id=%s, include_active=%s, "
+            "Запрос информации о стоп-заявках: "
+            "client_id=%s, include_active=%s, "
             "include_canceled=%s, include_executed=%s.",
             client_id,
             include_active,
@@ -417,7 +418,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         )
         result = await self._execute_request(self._stops.GetStops, model)
         if result:
-            self.logger.info("Получен список стоп-заявок: %s.", result)
+            self.logger.info("Получена информация о стоп-заявках: %s.", result)
         return result
 
     async def create_stop(
@@ -488,7 +489,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель ответа на создание новго стоп-ордера.
         """
         self.logger.info(
-            "Метод запущен с параметрами: client_id=%s, security_board=%s, "
+            "Создание стоп-заявки: client_id=%s, security_board=%s, "
             "security_code=%s, buy_sell=%s, stop_loss=%s, take_profit=%s, "
             "expiration_date=%s, link_order=%s, valid_before=%s.",
             client_id,
@@ -531,7 +532,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :return: Модель ответа на отмену стоп-ордера.
         """
         self.logger.info(
-            "Метод запущен с параметрами: " "client_id=%s, stop_id=%s.",
+            "Отмена стоп-заявки: " "client_id=%s, stop_id=%s.",
             client_id,
             stop_id,
         )
@@ -559,7 +560,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :param include_orders: включить информацию о заявках.
         """
         self.logger.info(
-            "Метод запущен с параметрами: request_id=%s, "
+            "Подписка на заявки и сделки: request_id=%s, "
             "client_ids=%s, include_trades=%s, include_orders=%s",
             request_id,
             client_ids,
@@ -582,7 +583,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :param request_id: ID запроса.
         """
         self.logger.info(
-            "Метод запущен с параметрами: request_id=%s.", request_id
+            "Отписка от заявок и сделок: request_id=%s.", request_id
         )
         model = OrderTradeUnsubscribeRequest(request_id=request_id)
         request = SubscriptionRequest(order_trade_unsubscribe_request=model)
@@ -599,7 +600,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :param security_code: тикер инструмента.
         """
         self.logger.info(
-            "Метод запущен с параметрами: request_id=%s, "
+            "Подиска на стакан: request_id=%s, "
             "security_board=%s, security_code=%s."
         )
         model = OrderBookSubscribeRequest(
@@ -621,7 +622,7 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :param security_code: тикер инструмента.
         """
         self.logger.info(
-            "Метод запущен с параметрами: request_id=%s, "
+            "Отписка от стакана: request_id=%s, "
             "security_board=%s, security_code=%s."
         )
         model = OrderBookUnsubscribeRequest(
