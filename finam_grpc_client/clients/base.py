@@ -87,11 +87,15 @@ class BaseGrpcClient(GrpcClientInterface, ABC):
 
     async def __aenter__(self):
         """Вход в менеджер контекста."""
+        await self.open()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Выход из менеджера контекста."""
         await self.close()
+
+    async def open(self):
+        """Выполняет действия, необходимые для начала работы."""
 
     async def close(self):
         """Закрывает соединение."""
