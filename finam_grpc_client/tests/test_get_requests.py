@@ -25,13 +25,19 @@ from finam_grpc_client.models.proto.stops_pb2 import Stop
 async def test_get_day_candles(client, code, time_frame):
     random_date = date.today() - timedelta(days=randint(1, 20))
     count = randint(1, 20)
-    to = random_date
+    if randint(0, 1):
+        from_ = None
+        to = random_date
+    else:
+        from_ = random_date
+        to = None
 
     result = await client.get_candles(
         security_board="TQBR",
         security_code=code,
         time_frame=time_frame,
         count=count,
+        from_=from_,
         to=to,
     )
     assert result is not None
@@ -67,12 +73,18 @@ async def test_get_day_candles_with_bad_code(client):
 async def test_get_intraday_candles(client, code, time_frame):
     random_datetime = datetime.now() - timedelta(hours=randint(1, 20))
     count = randint(1, 20)
-    to = random_datetime
+    if randint(0, 1):
+        from_ = None
+        to = random_datetime
+    else:
+        from_ = random_datetime
+        to = None
     result = await client.get_candles(
         security_board="TQBR",
         security_code=code,
         time_frame=time_frame,
         count=count,
+        from_=from_,
         to=to,
     )
     assert result is not None

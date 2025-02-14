@@ -90,8 +90,9 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         security_board: str,
         security_code: str,
         time_frame: Literal["M1", "M5", "M15", "H1", "D1", "W1"],
-        to: date | datetime,
-        count: int = 1,
+        from_: date | datetime | None = None,
+        to: date | datetime | None = None,
+        count: int | None = None,
     ) -> GetDayCandlesResult | GetIntradayCandlesResult | None:
         """
         Получение свечей.
@@ -99,8 +100,10 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :param security_board: Код площадки;
         :param security_code: код инструмента;
         :param time_frame: тайм-фрейм;
+        :param from_: начало интервала, datetime для внутридневных,
+          для остальных date или datetime;
         :param to: конец интервала, datetime для внутридневных,
-          для остальных date;
+          для остальных date или datetime;
         :param count: количество свечей.
 
         :return: Свечи.
@@ -125,11 +128,19 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         if time_frame in ("D1", "W1"):
             model_type = GetDayCandlesRequest
             method = self._candles.GetDayCandles
-            interval["to"] = dict(year=to.year, month=to.month, day=to.day)
+            interval["to"] = (
+                dict(year=to.year, month=to.month, day=to.day) if to else None
+            )
+            interval["from"] = (
+                dict(year=from_.year, month=from_.month, day=from_.day)
+                if from_
+                else None
+            )
         else:
             model_type = GetIntradayCandlesRequest
             method = self._candles.GetIntradayCandles
             interval["to"] = to
+            interval["from"] = from_
         model = model_type(**params)
         result = await self._execute_request(method, model)
         if result:
