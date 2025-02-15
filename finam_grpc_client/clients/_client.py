@@ -100,9 +100,9 @@ class FinamGrpcClient(SubscribesMixin, BaseGrpcClient):
         :param security_board: Код площадки;
         :param security_code: код инструмента;
         :param time_frame: тайм-фрейм;
-        :param from_: начало интервала, datetime для внутридневных,
+        :param from_: начало интервала UTC, datetime для внутридневных,
           для остальных date или datetime;
-        :param to: конец интервала, datetime для внутридневных,
+        :param to: конец интервала UTC, datetime для внутридневных,
           для остальных date или datetime;
         :param count: количество свечей.
 

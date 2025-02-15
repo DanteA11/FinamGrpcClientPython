@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from random import randint
 
 import pytest
@@ -23,7 +23,7 @@ from finam_grpc_client.models.proto.stops_pb2 import Stop
     ),
 )
 async def test_get_day_candles(client, code, time_frame):
-    random_date = date.today() - timedelta(days=randint(1, 20))
+    random_date = datetime.today() - timedelta(days=randint(1, 20))
     count = randint(1, 20)
     if randint(0, 1):
         from_ = None
@@ -71,7 +71,7 @@ async def test_get_day_candles_with_bad_code(client):
     ),
 )
 async def test_get_intraday_candles(client, code, time_frame):
-    random_datetime = datetime.now() - timedelta(hours=randint(1, 20))
+    random_datetime = datetime.now(UTC) - timedelta(hours=randint(1, 20))
     count = randint(1, 20)
     if randint(0, 1):
         from_ = None
