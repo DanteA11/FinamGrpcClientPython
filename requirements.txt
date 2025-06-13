@@ -1,2 +1,2 @@
-grpcio==1.70.0
-grpcio-tools==1.70.0
+googleapis-common-protos==1.70.0
+grpcio==1.73.0

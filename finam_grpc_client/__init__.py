@@ -1,7 +1,7 @@
 """
-Клиент для взаимодействия с GRPC API Finam.
+Клиенты для взаимодействия с GRPC API Finam.
 
-https://finamweb.github.io/trade-api-docs/category/grpc
+https://tradeapi.finam.ru/docs/about/
 """
 
-from .clients import FinamGrpcClient
+from .clients import FinamAsyncClient, FinamSyncClient
