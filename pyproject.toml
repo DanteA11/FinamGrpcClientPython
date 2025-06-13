@@ -1,25 +1,24 @@
 [tool.poetry]
-name = "finam_grpc_client"
-version = "2.2.0"
+name = "finam-grpc-client"
+version = "3.0.0"
 readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
 grpcio = "^1.68.1"
-grpcio-tools = "^1.68.1"
+googleapis-common-protos = "^1.70.0"
+poetry-core = "^2.1.3"
 
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
-flake8 = "^7.1.1"
-flake8-pyproject = "^1.2.3"
-flake8-docstrings = "^1.7.0"
-flake8-bugbear = "^24.10.31"
 isort = "^5.13.2"
-mypy = "^1.14.1"
 types-protobuf = "^5.29.1.20241207"
 grpc-stubs = "^1.53.0.5"
+mypy-protobuf = "^3.6.0"
+grpcio-tools = "^1.68.1"
+protobuf = "^6.31.1"
 
 
 [tool.poetry.group.test.dependencies]
@@ -32,26 +31,14 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 79
-extend-exclude = "models"
+exclude = ".*_pb2.*"
 
 [tool.isort]
 profile = "black"
 skip = [
-    ".git", "__pycache__", ".venv", "venv", "models"
+    ".git", "__pycache__", ".venv", "venv", "grpc"
 ]
 line_length = 79
-
-[tool.flake8]
-exclude = [
-    ".git", "__pycache__", ".venv", "venv", "tests", "models"
-]
-max-line-length = 79
-extend-select = "B950"
-extend-ignore = ["E203", "E501", "E701", "D107"]
-per-file-ignores = "__init__.py:F401,F403"
-
-[tool.mypy]
-exclude = [".venv", "venv", "tests", "models"]
 
 [tool.pytest.ini_options]
 addopts = [

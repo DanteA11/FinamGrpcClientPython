@@ -1,14 +1,13 @@
 import pytest
 
-from finam_grpc_client.clients import FinamGrpcClient
+from finam_grpc_client import FinamAsyncClient, FinamSyncClient
 
 token = ""
-c_id = ""
-test_trades = False  # Запускать тесты с открытием сделок.
+acc_id = ""
 
-if not token or not c_id:
+if not token or not acc_id:
     pytest.exit(
-        "Не установлен token или client_id. Установите их в файле conftest.py"
+        "Не установлен token или acc_id. Установите их в файле conftest.py"
     )
 
 
@@ -18,11 +17,17 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture(scope="session")
-async def client():
-    async with FinamGrpcClient(token) as client:
+async def async_client():
+    async with FinamAsyncClient(token) as client:
         yield client
 
 
 @pytest.fixture(scope="session")
-async def client_id():
-    return c_id
+def sync_client():
+    with FinamSyncClient(token) as client:
+        yield client
+
+
+@pytest.fixture
+def account_id():
+    return acc_id
