@@ -1,12 +1,11 @@
 import logging
 from abc import ABC
-from typing import Generic
+from typing import Generic, TypeVar
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.type.interval_pb2 import Interval
 from grpc import Channel
 from grpc.aio import Channel as AsyncChannel
-from typing_extensions import TypeVar
 
 from finam_grpc_client.grpc.tradeapi.v1.accounts.accounts_service_pb2_grpc import (
     AccountsServiceStub,
