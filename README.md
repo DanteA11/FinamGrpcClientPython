@@ -7,12 +7,12 @@ Python >= 3.12
 
 ---
 ## Зависимости
-Установить зависимости можно через [poetry](https://python-poetry.org/docs/) или pip:
+В директории dist находятся дистрибутивы, которые можно установить, используя ваш пакетный менеджер:
 ```shell
-  poetry install --without test,dev
+  poetry add FinamGrpcClientPython/dist/finam_grpc_client-3.0.0.tar.gz
 ```
 ```shell
-  pip install -r requirements.txt
+  pip install FinamGrpcClientPython/dist/finam_grpc_client-3.0.0.tar.gz
 ```
 ___
 ## Использование
