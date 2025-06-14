@@ -10,7 +10,7 @@ from grpc import (
     UnaryStreamMultiCallable,
     UnaryUnaryMultiCallable,
     secure_channel,
-    ssl_channel_credentials,
+    ssl_channel_credentials, RpcError, StatusCode,
 )
 
 from finam_grpc_client.grpc.tradeapi.v1.auth.auth_service_pb2 import (
@@ -151,9 +151,9 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
 
     def stop(self):
         self._stop()
-        self._stop_subscribe_handlers()
         self._stop_subscribe_workers()
         self.channel.close()
+        self._stop_subscribe_handlers()
         self.__on_quote = self.default_handler
         self.__on_order_book = self.default_handler
         self.__on_latest_trade = self.default_handler
@@ -252,12 +252,19 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         handler = self.__types_handlers[type(request)]
 
         def subscribe_worker(flag: Event):
-            for event in method(request=request, metadata=self.metadata):
-                if flag.is_set():
-                    break
-                self.logger.debug("Получен новый event: [\n%s\n]", event)
-                h = getattr(self, handler)
-                self.__background_tasks.submit(h, event)
+            try:
+                for event in method(request=request, metadata=self.metadata):
+                    if flag.is_set():
+                        break
+                    self.logger.debug("Получен новый event: [\n%s\n]", event)
+                    h = getattr(self, handler)
+                    self.__background_tasks.submit(h, event)
+            except RpcError as exc:
+                if exc.code() == StatusCode.CANCELLED:
+                    flag.is_set()
+                    self.logger.debug("Принудительная отмена подписки: %s ", request)
+                    return
+                raise exc
 
         e = Event()
         self.__subscribe_handlers_pool.submit(subscribe_worker, flag=e)
@@ -301,13 +308,18 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         def request_iterator():
             while self.state:
                 yield self.__order_trade_requests.get()
-
-        for event in self._orders.SubscribeOrderTrade(
-            request_iterator=request_iterator(),
-            metadata=self.metadata,
-        ):
-            self.logger.debug("Получен новый event: [\n%s\n]", event)
-            self.__background_tasks.submit(self.on_order_trade, event)
+        try:
+            for event in self._orders.SubscribeOrderTrade(
+                request_iterator=request_iterator(),
+                metadata=self.metadata,
+            ):
+                self.logger.debug("Получен новый event: [\n%s\n]", event)
+                self.__background_tasks.submit(self.on_order_trade, event)
+        except RpcError as exc:
+            if exc.code() == StatusCode.CANCELLED:
+                self.logger.debug("Принудительная отмена подписки на ордера и сделки.")
+                return
+            raise exc
 
     @staticmethod
     def __execute_request(
