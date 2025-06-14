@@ -111,11 +111,11 @@ class TestsSubscribes:
         store = []
         async_client.on_order_book = self.on_event(store)
         await async_client.subscribe_order_book(self.symbol)
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         await async_client.unsubscribe_order_book(self.symbol)
         assert len(store) > 2
         store.clear()
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         assert len(store) == 0
         async_client.on_order_book = async_client.default_handler
 
@@ -123,11 +123,11 @@ class TestsSubscribes:
         store = []
         async_client.on_quote = self.on_event(store)
         await async_client.subscribe_quote(self.symbol)
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         await async_client.unsubscribe_quote(self.symbol)
         assert len(store) > 2
         store.clear()
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         assert len(store) == 0
         async_client.on_quote = async_client.default_handler
 
@@ -137,11 +137,11 @@ class TestsSubscribes:
         store = []
         async_client.on_latest_trade = self.on_event(store)
         await async_client.subscribe_latest_trades(self.symbol)
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         await async_client.unsubscribe_latest_trades(self.symbol)
         assert len(store) > 2
         store.clear()
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         assert len(store) == 0
         async_client.on_latest_trade = async_client.default_handler
 

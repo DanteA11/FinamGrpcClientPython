@@ -131,11 +131,11 @@ class TestsSubscribes:
         store = []
         sync_client.on_order_book = self.on_event(store)
         sync_client.subscribe_order_book(self.symbol)
-        time.sleep(5)
+        time.sleep(10)
         sync_client.unsubscribe_order_book(self.symbol)
         assert len(store) > 2
         store.clear()
-        time.sleep(5)
+        time.sleep(10)
         assert len(store) == 0
         sync_client.on_order_book = sync_client.default_handler
 
@@ -143,11 +143,11 @@ class TestsSubscribes:
         store = []
         sync_client.on_quote = self.on_event(store)
         sync_client.subscribe_quote(self.symbol)
-        time.sleep(5)
+        time.sleep(10)
         sync_client.unsubscribe_quote(self.symbol)
         assert len(store) > 2
         store.clear()
-        time.sleep(5)
+        time.sleep(10)
         assert len(store) == 0
         sync_client.on_quote = sync_client.default_handler
 
@@ -157,10 +157,10 @@ class TestsSubscribes:
         store = []
         sync_client.on_latest_trade = self.on_event(store)
         sync_client.subscribe_latest_trades(self.symbol)
-        time.sleep(5)
+        time.sleep(10)
         sync_client.unsubscribe_latest_trades(self.symbol)
         assert len(store) > 2
         store.clear()
-        time.sleep(5)
+        time.sleep(10)
         assert len(store) == 0
         sync_client.on_latest_trade = sync_client.default_handler

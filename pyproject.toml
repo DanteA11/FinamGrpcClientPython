@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "finam-grpc-client"
-version = "3.0.1"
+version = "3.0.2"
 description = "Клиенты для взаимодействия с GRPC Api Finam"
 authors = ["Sergey Korepanov <sergeykorepanov1996@gmail.com>"]
 license = "LICENSE"
@@ -44,5 +44,5 @@ line_length = 79
 
 [tool.pytest.ini_options]
 addopts = [
-    "--import-mode=importlib",
+    "--import-mode=importlib", "--log-cli-level=DEBUG"
 ]
