@@ -28,6 +28,18 @@ def sync_client():
         yield client
 
 
+@pytest.fixture()
+async def async_client_new():
+    async with FinamAsyncClient(token) as client:
+        yield client
+
+
+@pytest.fixture()
+def sync_client_new():
+    with FinamSyncClient(token) as client:
+        yield client
+
+
 @pytest.fixture
 def account_id():
     return acc_id

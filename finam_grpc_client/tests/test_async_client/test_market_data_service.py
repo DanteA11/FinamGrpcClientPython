@@ -91,7 +91,7 @@ class TestsMarketDataService(TypeChecker):
 class TestsSubscribes:
     symbol = TypeChecker.symbol
 
-    async def test_subscribe_unsubscribe_bars(self, async_client, account_id):
+    async def test_subscribe_unsubscribe_bars(self, async_client):
         store: list[SubscribeBarsResponse] = []
         await async_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
         async_client.on_bar = self.on_bar(store)
@@ -105,9 +105,7 @@ class TestsSubscribes:
         assert len(store) == 0
         async_client.on_bar = async_client.default_handler
 
-    async def test_subscribe_unsubscribe_order_book(
-        self, async_client, account_id
-    ):
+    async def test_subscribe_unsubscribe_order_book(self, async_client):
         store = []
         async_client.on_order_book = self.on_event(store)
         await async_client.subscribe_order_book(self.symbol)
@@ -119,7 +117,7 @@ class TestsSubscribes:
         assert len(store) == 0
         async_client.on_order_book = async_client.default_handler
 
-    async def test_subscribe_unsubscribe_quote(self, async_client, account_id):
+    async def test_subscribe_unsubscribe_quote(self, async_client):
         store = []
         async_client.on_quote = self.on_event(store)
         await async_client.subscribe_quote(self.symbol)
@@ -131,9 +129,7 @@ class TestsSubscribes:
         assert len(store) == 0
         async_client.on_quote = async_client.default_handler
 
-    async def test_subscribe_unsubscribe_latest_trades(
-        self, async_client, account_id
-    ):
+    async def test_subscribe_unsubscribe_latest_trades(self, async_client):
         store = []
         async_client.on_latest_trade = self.on_event(store)
         await async_client.subscribe_latest_trades(self.symbol)
@@ -144,6 +140,29 @@ class TestsSubscribes:
         await asyncio.sleep(10)
         assert len(store) == 0
         async_client.on_latest_trade = async_client.default_handler
+
+    async def test_dooble_subscribe(self, async_client, caplog):
+        store = []
+        async_client.on_quote = self.on_event(store)
+        await async_client.subscribe_quote(self.symbol)
+        await asyncio.sleep(5)
+        await async_client.subscribe_quote(self.symbol)
+        await asyncio.sleep(5)
+        check = False
+        for record in caplog.records:
+            if record.levelname != "WARNING":
+                continue
+            assert "Подписка уже существует" in record.message
+            check = True
+        else:
+            if not check:
+                pytest.fail("Не найдено логов уровня WARNING")
+        await async_client.unsubscribe_quote(self.symbol)
+        assert len(store) > 2
+        store.clear()
+        await asyncio.sleep(10)
+        assert len(store) == 0
+        async_client.on_quote = async_client.default_handler
 
     @staticmethod
     def on_bar(store: list):

@@ -234,13 +234,16 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
                 self.__background_tasks.add(t)
                 t.add_done_callback(self.__background_tasks.discard)
 
-        task = asyncio.create_task(subscribe_worker())
         key = getattr(request, "symbol", None) or tuple(
             getattr(request, "symbols")
         )
         timeframe = getattr(request, "timeframe", None)
         if timeframe:
             key = (key, timeframe)
+        if key in self.__subscribe_tasks:
+            self.logger.warning("Подписка уже существует: %s", request)
+            return
+        task = asyncio.create_task(subscribe_worker(), name=str(key))
         self.__subscribe_tasks[key] = task
 
     def _unsubscribe_unary_stream(self, request):
