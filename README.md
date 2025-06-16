@@ -9,10 +9,10 @@ Python >= 3.12
 ## Зависимости
 В директории dist находятся дистрибутивы, которые можно установить, используя ваш пакетный менеджер:
 ```shell
-  poetry add FinamGrpcClientPython/dist/finam_grpc_client-3.0.2.tar.gz
+  poetry add FinamGrpcClientPython/dist/finam_grpc_client-3.0.3.tar.gz
 ```
 ```shell
-  pip install FinamGrpcClientPython/dist/finam_grpc_client-3.0.2.tar.gz
+  pip install FinamGrpcClientPython/dist/finam_grpc_client-3.0.3.tar.gz
 ```
 ___
 ## Использование

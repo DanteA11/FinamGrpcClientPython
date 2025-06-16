@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "finam-grpc-client"
-version = "3.0.2"
+version = "3.0.3"
 description = "Клиенты для взаимодействия с GRPC Api Finam"
 authors = ["Sergey Korepanov <sergeykorepanov1996@gmail.com>"]
 license = "LICENSE"

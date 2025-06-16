@@ -45,7 +45,6 @@ class FinamSyncClient(BaseSyncClient):
     Либо можно воспользоваться менеджером контекста.
 
     :param token: Токен доступа к Api.
-    :param handlers_thread_amount: Количество потоков для запуска получения событий.
     :param workers_thread_amount: Количество потоков для запуска обработчиков.
     """
 
@@ -57,7 +56,6 @@ class FinamSyncClient(BaseSyncClient):
         super().__init__(
             "api.finam.ru:443",
             token,
-            handlers_thread_amount=handlers_thread_amount,
             workers_thread_amount=workers_thread_amount,
         )
 

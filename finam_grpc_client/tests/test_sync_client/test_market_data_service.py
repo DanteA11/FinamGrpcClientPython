@@ -88,6 +88,97 @@ class TestsMarketDataService(TypeChecker):
 class TestsSubscribes:
     symbol = TypeChecker.symbol
 
+    def test_subscribe_unsubscribe_bars(self, sync_client):
+        store: list[SubscribeBarsResponse] = []
+        sync_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        sync_client.on_bar = self.on_bar(store)
+        time.sleep(60)
+        sync_client.unsubscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        assert len(store) == 2
+        store.clear()
+        time.sleep(60)
+        assert len(store) == 0
+        sync_client.on_bar = sync_client.default_handler
+
+    def test_subscribe_unsubscribe_order_book(self, sync_client):
+        store = []
+        sync_client.on_order_book = self.on_event(store)
+        sync_client.subscribe_order_book(self.symbol)
+        time.sleep(10)
+        sync_client.unsubscribe_order_book(self.symbol)
+        assert len(store) > 2
+        store.clear()
+        time.sleep(10)
+        assert len(store) == 0
+        sync_client.on_order_book = sync_client.default_handler
+
+    def test_subscribe_unsubscribe_quote(self, sync_client):
+        store = []
+        sync_client.on_quote = self.on_event(store)
+        sync_client.subscribe_quote(self.symbol)
+        time.sleep(10)
+        sync_client.unsubscribe_quote(self.symbol)
+        assert len(store) > 2
+        store.clear()
+        time.sleep(10)
+        assert len(store) == 0
+        sync_client.on_quote = sync_client.default_handler
+
+    def test_subscribe_unsubscribe_latest_trades(self, sync_client):
+        store = []
+        sync_client.on_latest_trade = self.on_event(store)
+        sync_client.subscribe_latest_trades(self.symbol)
+        time.sleep(10)
+        sync_client.unsubscribe_latest_trades(self.symbol)
+        assert len(store) > 2
+        store.clear()
+        time.sleep(10)
+        assert len(store) == 0
+        sync_client.on_latest_trade = sync_client.default_handler
+
+    def test_dooble_subscribe(self, sync_client, caplog):
+        store = []
+        sync_client.on_quote = self.on_event(store)
+        sync_client.subscribe_quote(self.symbol)
+        time.sleep(5)
+        sync_client.subscribe_quote(self.symbol)
+        time.sleep(5)
+        check = False
+        for record in caplog.records:
+            if record.levelname != "WARNING":
+                continue
+            assert "Подписка уже существует" in record.message
+            check = True
+        else:
+            if not check:
+                pytest.fail("Не найдено логов уровня WARNING")
+        sync_client.unsubscribe_quote(self.symbol)
+        assert len(store) > 2
+        store.clear()
+        time.sleep(10)
+        assert len(store) == 0
+        sync_client.on_quote = sync_client.default_handler
+
+    def test_close_channel(self, sync_client_new, caplog):
+        store = []
+        sync_client_new.on_order_book = self.on_event(store)
+        sync_client_new.subscribe_order_book(self.symbol)
+        time.sleep(10)
+        sync_client_new.channel.close()
+        assert len(store) > 2
+        store.clear()
+        time.sleep(10)
+        assert len(store) == 0
+        check = False
+        for record in caplog.records:
+            if record.levelname != "WARNING":
+                continue
+            assert "Принудительная отмена подписки" in record.message
+            check = True
+        else:
+            if not check:
+                pytest.fail("Не найдено логов уровня WARNING")
+
     @staticmethod
     def on_bar(store: list):
         last: Bar | None = None
@@ -114,53 +205,3 @@ class TestsSubscribes:
             store.append(event)
 
         return wrapped_func
-
-    def test_subscribe_unsubscribe_bars(self, sync_client, account_id):
-        store: list[SubscribeBarsResponse] = []
-        sync_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
-        sync_client.on_bar = self.on_bar(store)
-        time.sleep(60)
-        sync_client.unsubscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
-        assert len(store) == 2
-        store.clear()
-        time.sleep(60)
-        assert len(store) == 0
-        sync_client.on_bar = sync_client.default_handler
-
-    def test_subscribe_unsubscribe_order_book(self, sync_client, account_id):
-        store = []
-        sync_client.on_order_book = self.on_event(store)
-        sync_client.subscribe_order_book(self.symbol)
-        time.sleep(10)
-        sync_client.unsubscribe_order_book(self.symbol)
-        assert len(store) > 2
-        store.clear()
-        time.sleep(10)
-        assert len(store) == 0
-        sync_client.on_order_book = sync_client.default_handler
-
-    def test_subscribe_unsubscribe_quote(self, sync_client, account_id):
-        store = []
-        sync_client.on_quote = self.on_event(store)
-        sync_client.subscribe_quote(self.symbol)
-        time.sleep(10)
-        sync_client.unsubscribe_quote(self.symbol)
-        assert len(store) > 2
-        store.clear()
-        time.sleep(10)
-        assert len(store) == 0
-        sync_client.on_quote = sync_client.default_handler
-
-    def test_subscribe_unsubscribe_latest_trades(
-        self, sync_client, account_id
-    ):
-        store = []
-        sync_client.on_latest_trade = self.on_event(store)
-        sync_client.subscribe_latest_trades(self.symbol)
-        time.sleep(10)
-        sync_client.unsubscribe_latest_trades(self.symbol)
-        assert len(store) > 2
-        store.clear()
-        time.sleep(10)
-        assert len(store) == 0
-        sync_client.on_latest_trade = sync_client.default_handler
