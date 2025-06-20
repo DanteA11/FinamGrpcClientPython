@@ -58,6 +58,7 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         super().__init__(channel=channel, token=token)
         self.__refresh_token_task: Thread | None = None
         self.__subscribe_workers_job: Thread | None = None
+        self.__subscribe_workers_job_event = Event()
         self.__background_tasks: ThreadPoolExecutor | None = None
         self.__on_quote = self.default_handler
         self.__on_order_book = self.default_handler
@@ -137,8 +138,8 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
 
     def start(self):
         self._start()
-        self._start_subscribe_workers()
         self._get_session_token()
+        self._start_subscribe_workers()
         if self.__refresh_token_task is None:
             self.__refresh_token_task = r = Thread(
                 target=self.__session_token_job,
@@ -210,6 +211,7 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
             target=self.__order_trade_events_worker,
             name="OrderTradeEventsWorker",
             daemon=True,
+            kwargs={"e": self.__subscribe_workers_job_event},
         )
         s.start()
 
@@ -219,9 +221,7 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         if self.__subscribe_workers_job is None:
             self.logger.warning("Обработка событий подписок уже остановлена")
             return
-        while self.__subscribe_workers_job.is_alive():
-            self.logger.debug("Ожидание остановки обработки событий подписок")
-            time.sleep(1)
+        self.__subscribe_workers_job_event.set()
         self.__subscribe_workers_job = None
         self.__background_tasks.shutdown(cancel_futures=True)
         self.logger.info("Обработка событий подписок остановлена")
@@ -246,7 +246,11 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                         "Принудительная отмена подписки: %s ", request
                     )
                     return
-                raise exc
+                self.logger.warning(
+                    "При обработке подписки %s произошла ошибка: %s",
+                    request,
+                    exc,
+                )
 
         e = Event()
         key = getattr(request, "symbol", None) or tuple(
@@ -296,7 +300,7 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
             self._get_session_token()
         self.logger.info("Завершение задачи по обновлению токена сессии")
 
-    def __order_trade_events_worker(self) -> None:
+    def __order_trade_events_worker(self, e: Event) -> None:
 
         def request_iterator():
             while self.state:
@@ -307,6 +311,8 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                 request_iterator=request_iterator(),
                 metadata=self.metadata,
             ):
+                if e.is_set():
+                    break
                 self.logger.debug("Получен новый event: [\n%s\n]", event)
                 self.__background_tasks.submit(self.on_order_trade, event)
         except RpcError as exc:
@@ -315,7 +321,10 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                     "Принудительная отмена подписки на ордера и сделки."
                 )
                 return
-            raise exc
+            self.logger.warning(
+                "При обработке подписки на ордера и сделки произошла ошибка: %s",
+                exc,
+            )
 
     @staticmethod
     def __execute_request(

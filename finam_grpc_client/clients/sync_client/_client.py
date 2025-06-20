@@ -50,9 +50,7 @@ class FinamSyncClient(BaseSyncClient):
 
     logger = logging.getLogger("finam_grpc_client.FinamSyncClient")
 
-    def __init__(
-        self, token: str, handlers_thread_amount=4, workers_thread_amount=6
-    ):
+    def __init__(self, token: str, *, workers_thread_amount=6):
         super().__init__(
             "api.finam.ru:443",
             token,
@@ -459,33 +457,33 @@ class FinamSyncClient(BaseSyncClient):
             SubscribeBarsRequest(symbol=symbol, timeframe=timeframe)
         )
 
-    # def subscribe_order_trade(self, account_id, data_type):
-    #     self.logger.info(
-    #         "Подписка на собственные заявки и сделки: account_id=%s, data_type=%s",
-    #         account_id,
-    #         data_type,
-    #     )
-    #     self._execute_order_trade_subscribe_request(
-    #         OrderTradeRequest(
-    #             action=OrderTradeRequest.Action.ACTION_SUBSCRIBE,
-    #             data_type=data_type,
-    #             account_id=account_id,
-    #         )
-    #     )
-    #
-    # def unsubscribe_order_trade(self, account_id, data_type):
-    #     self.logger.info(
-    #         "Отмена подписки на собственные заявки и сделки: account_id=%s, data_type=%s",
-    #         account_id,
-    #         data_type,
-    #     )
-    #     self._execute_order_trade_subscribe_request(
-    #         OrderTradeRequest(
-    #             action=OrderTradeRequest.Action.ACTION_UNSUBSCRIBE,
-    #             data_type=data_type,
-    #             account_id=account_id,
-    #         )
-    #     )
+    def subscribe_order_trade(self, account_id, data_type):
+        self.logger.info(
+            "Подписка на собственные заявки и сделки: account_id=%s, data_type=%s",
+            account_id,
+            data_type,
+        )
+        self._execute_order_trade_subscribe_request(
+            OrderTradeRequest(
+                action=OrderTradeRequest.Action.ACTION_SUBSCRIBE,
+                data_type=data_type,
+                account_id=account_id,
+            )
+        )
+
+    def unsubscribe_order_trade(self, account_id, data_type):
+        self.logger.info(
+            "Отмена подписки на собственные заявки и сделки: account_id=%s, data_type=%s",
+            account_id,
+            data_type,
+        )
+        self._execute_order_trade_subscribe_request(
+            OrderTradeRequest(
+                action=OrderTradeRequest.Action.ACTION_UNSUBSCRIBE,
+                data_type=data_type,
+                account_id=account_id,
+            )
+        )
 
     def __get_transactions_trades(
         self, account_id, limit, start_time, end_time, method, request_type

@@ -448,33 +448,33 @@ class FinamAsyncClient(BaseAsyncClient):
             SubscribeBarsRequest(symbol=symbol, timeframe=timeframe)
         )
 
-    # async def subscribe_order_trade(self, account_id, data_type):
-    #     self.logger.info(
-    #         "Подписка на собственные заявки и сделки: account_id=%s, data_type=%s",
-    #         account_id,
-    #         data_type,
-    #     )
-    #     await self._execute_order_trade_subscribe_request(
-    #         OrderTradeRequest(
-    #             action=OrderTradeRequest.Action.ACTION_SUBSCRIBE,
-    #             data_type=data_type,
-    #             account_id=account_id,
-    #         )
-    #     )
-    #
-    # async def unsubscribe_order_trade(self, account_id, data_type):
-    #     self.logger.info(
-    #         "Отмена подписки на собственные заявки и сделки: account_id=%s, data_type=%s",
-    #         account_id,
-    #         data_type,
-    #     )
-    #     await self._execute_order_trade_subscribe_request(
-    #         OrderTradeRequest(
-    #             action=OrderTradeRequest.Action.ACTION_UNSUBSCRIBE,
-    #             data_type=data_type,
-    #             account_id=account_id,
-    #         )
-    #     )
+    async def subscribe_order_trade(self, account_id, data_type):
+        self.logger.info(
+            "Подписка на собственные заявки и сделки: account_id=%s, data_type=%s",
+            account_id,
+            data_type,
+        )
+        await self._execute_order_trade_subscribe_request(
+            OrderTradeRequest(
+                action=OrderTradeRequest.Action.ACTION_SUBSCRIBE,
+                data_type=data_type,
+                account_id=account_id,
+            )
+        )
+
+    async def unsubscribe_order_trade(self, account_id, data_type):
+        self.logger.info(
+            "Отмена подписки на собственные заявки и сделки: account_id=%s, data_type=%s",
+            account_id,
+            data_type,
+        )
+        await self._execute_order_trade_subscribe_request(
+            OrderTradeRequest(
+                action=OrderTradeRequest.Action.ACTION_UNSUBSCRIBE,
+                data_type=data_type,
+                account_id=account_id,
+            )
+        )
 
     async def __get_transactions_trades(
         self, account_id, limit, start_time, end_time, method, request_type
