@@ -5,11 +5,14 @@ from finam_grpc_client.grpc.tradeapi.v1.marketdata.marketdata_service_pb2 import
 )
 from finam_grpc_client.grpc.tradeapi.v1.orders.orders_service_pb2 import (
     Leg,
+    OrderTradeRequest,
     OrderType,
     StopCondition,
     TimeInForce,
 )
 from finam_grpc_client.grpc.tradeapi.v1.side_pb2 import Side
+
+DataType = OrderTradeRequest.DataType
 
 __all__ = (
     "TimeFrame",
@@ -18,4 +21,5 @@ __all__ = (
     "StopCondition",
     "Leg",
     "Side",
+    "DataType",
 )

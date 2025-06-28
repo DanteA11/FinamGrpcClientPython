@@ -415,27 +415,27 @@ class SyncClientInterface(ABC):
         :param timeframe: Необходимый таймфрейм.
         """
 
-    # @abstractmethod
-    # def subscribe_order_trade(
-    #     self, account_id: str, data_type: OrderTradeRequest.DataType.ValueType
-    # ) -> None:
-    #     """
-    #     Подписка на собственные заявки и сделки.
-    #
-    #     :param account_id: Идентификатор аккаунта.
-    #     :param data_type: Подписка только на заявки/ордера или на все сразу.
-    #     """
-    #
-    # @abstractmethod
-    # def unsubscribe_order_trade(
-    #     self, account_id: str, data_type: OrderTradeRequest.DataType.ValueType
-    # ) -> None:
-    #     """
-    #     Отмена подписки на собственные заявки и сделки.
-    #
-    #     :param account_id: Идентификатор аккаунта.
-    #     :param data_type: Подписка только на заявки/ордера или на все сразу.
-    #     """
+    @abstractmethod
+    def subscribe_order_trade(
+        self, account_id: str, data_type: OrderTradeRequest.DataType.ValueType
+    ) -> None:
+        """
+        Подписка на собственные заявки и сделки.
+
+        :param account_id: Идентификатор аккаунта.
+        :param data_type: Подписка только на заявки/ордера или на все сразу.
+        """
+
+    @abstractmethod
+    def unsubscribe_order_trade(
+        self, account_id: str, data_type: OrderTradeRequest.DataType.ValueType
+    ) -> None:
+        """
+        Отмена подписки на собственные заявки и сделки.
+
+        :param account_id: Идентификатор аккаунта.
+        :param data_type: Подписка только на заявки/ордера или на все сразу.
+        """
 
     def default_handler(self, event) -> None:
         """Обработчик по умолчанию."""
@@ -643,10 +643,10 @@ class AsyncClientInterface(SyncClientInterface, ABC):
     @abstractmethod
     def unsubscribe_bars(self, symbol, timeframe) -> None: ...
 
-    # @abstractmethod
-    # async def subscribe_order_trade(self, account_id, data_type) -> None: ...
-    #
-    # @abstractmethod
-    # async def unsubscribe_order_trade(self, account_id, data_type) -> None: ...
+    @abstractmethod
+    async def subscribe_order_trade(self, account_id, data_type) -> None: ...
+
+    @abstractmethod
+    async def unsubscribe_order_trade(self, account_id, data_type) -> None: ...
 
     async def default_handler(self, event) -> None: ...

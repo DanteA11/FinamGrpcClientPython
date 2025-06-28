@@ -8,6 +8,7 @@ from logging import Logger
 from google.protobuf.message import Message
 from grpc import ssl_channel_credentials
 from grpc.aio import (
+    AioRpcError,
     Metadata,
     UnaryStreamMultiCallable,
     UnaryUnaryMultiCallable,
@@ -143,6 +144,7 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
     async def start(self):
         self._start()
         await self._get_session_token()
+        self._start_subscribe_workers()
         if self.__refresh_token_task is None:
             self.__refresh_token_task = asyncio.create_task(
                 self.__session_token_job(), name="RefreshToken"
@@ -154,10 +156,6 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         self._stop()
         await self.channel.close(None)
         self.logger.info("Соединение закрыто")
-
-    def _start(self):
-        super()._start()
-        self._start_subscribe_workers()
 
     def _stop(self):
         super()._stop()
@@ -227,12 +225,21 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         handler = self.__types_handlers[type(request)]
 
         async def subscribe_worker():
-            async for event in method(request=request, metadata=self.metadata):
-                self.logger.debug("Получен новый event: [\n%s\n]", event)
-                h = getattr(self, handler)
-                t = asyncio.create_task(h(event))
-                self.__background_tasks.add(t)
-                t.add_done_callback(self.__background_tasks.discard)
+            try:
+                async for event in method(
+                    request=request, metadata=self.metadata
+                ):
+                    self.logger.debug("Получен новый event: [\n%s\n]", event)
+                    h = getattr(self, handler)
+                    t = asyncio.create_task(h(event))
+                    self.__background_tasks.add(t)
+                    t.add_done_callback(self.__background_tasks.discard)
+            except AioRpcError as exc:
+                self.logger.warning(
+                    "При обработке подписки %s произошла ошибка: %s",
+                    request,
+                    exc,
+                )
 
         key = getattr(request, "symbol", None) or tuple(
             getattr(request, "symbols")
@@ -284,14 +291,17 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
             while self.state:
                 yield await self.__order_trade_requests.get()
 
-        async for event in self._orders.SubscribeOrderTrade(
-            request_iterator=request_iterator(),
-            metadata=self.metadata,
-        ):
-            self.logger.debug("Получен новый event: [\n%s\n]", event)
-            task = asyncio.create_task(self.on_order_trade(event))
-            self.__background_tasks.add(task)
-            task.add_done_callback(self.__background_tasks.discard)
+        try:
+            async for event in self._orders.SubscribeOrderTrade(
+                request_iterator=request_iterator(),
+                metadata=self.metadata,
+            ):
+                self.logger.debug("Получен новый event: [\n%s\n]", event)
+                task = asyncio.create_task(self.on_order_trade(event))
+                self.__background_tasks.add(task)
+                task.add_done_callback(self.__background_tasks.discard)
+        except AioRpcError as exc:
+            self.logger.warning("Произошла ошибка: %s", exc)
 
     @staticmethod
     async def __execute_request(
