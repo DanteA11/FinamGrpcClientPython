@@ -139,13 +139,14 @@ if __name__ == "__main__":
 Синхронно
 ```python
 import time
+import logging
 
 from finam_grpc_client import FinamSyncClient
 
 token = "Токен авторизации"
 
 def on_order_book(event):
-    print(event)
+    logging.warning(event)
 
 def main():
     with FinamSyncClient(token=token) as client:
@@ -157,8 +158,9 @@ def main():
         time.sleep(10)
         # Отменяем подписку
         client.unsubscribe_order_book(symbol)
+        logging.warning("Отмена подписки")
         time.sleep(5)
-        print("Завершено")
+        logging.warning("Завершено")
 
         
 if __name__ == "__main__":
@@ -167,13 +169,14 @@ if __name__ == "__main__":
 Асинхронно
 ```python
 import asyncio
+import logging
 
 from finam_grpc_client import FinamAsyncClient
 
 token = "Токен авторизации"
 
 async def on_order_book(event):
-    print(event)
+    logging.warning(event)
 
 async def main():
     async with FinamAsyncClient(token=token) as client:
@@ -185,8 +188,9 @@ async def main():
         await asyncio.sleep(10)
         # Отменяем подписку
         await client.unsubscribe_order_book(symbol)
+        logging.warning("Отмена подписки")
         await asyncio.sleep(5)
-        print("Завершено")
+        logging.warning("Завершено")
 
         
 if __name__ == "__main__":
