@@ -7,6 +7,7 @@ from threading import Event, Lock, Thread
 
 from google.protobuf.message import Message
 from grpc import (
+    Call,
     RpcError,
     StatusCode,
     UnaryStreamMultiCallable,
@@ -40,9 +41,9 @@ from ..client_interfaces import SyncClientInterface
 class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
     logger = logging.getLogger("finam_grpc_client.BaseSyncClient")
 
-    __subscribe_tasks: dict[
+    __subscribe_calls: dict[
         tuple[str, ...] | str | tuple[str, TimeFrame.ValueType],
-        tuple[Event, Thread],
+        Call,
     ] = {}
     """События для остановки задач по обработке подписок."""
     __order_trade_requests: Queue[OrderTradeResponse] = Queue(maxsize=20)
@@ -153,9 +154,9 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
     def stop(self):
         self._stop()
         self._stop_subscribe_workers()
-        for e, t in self.__subscribe_tasks.values():
-            e.set()
-        self.__subscribe_tasks.clear()
+        for c in self.__subscribe_calls.values():
+            c.cancel()
+        self.__subscribe_calls.clear()
         self.channel.close()
         self.__on_quote = self.default_handler
         self.__on_order_book = self.default_handler
@@ -231,45 +232,41 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
     ):
         handler = self.__types_handlers[type(request)]
 
-        def subscribe_worker(flag: Event):
+        def subscribe_worker(c):
             try:
-                for event in method(request=request, metadata=self.metadata):
-                    if flag.is_set():
-                        break
+                for event in c:
                     self.logger.debug("Получен новый event: [\n%s\n]", event)
                     h = getattr(self, handler)
                     self.__background_tasks.submit(h, event)
             except RpcError as exc:
                 if exc.code() == StatusCode.CANCELLED:
-                    flag.is_set()
-                    self.logger.warning(
-                        "Принудительная отмена подписки: %s ", request
-                    )
+                    self.logger.info("Отменена подписка %s", request)
                     return
-                self.logger.warning(
+                self.logger.error(
                     "При обработке подписки %s произошла ошибка: %s",
                     request,
                     exc,
                 )
 
-        e = Event()
         key = getattr(request, "symbol", None) or tuple(
             getattr(request, "symbols")
         )
         timeframe = getattr(request, "timeframe", None)
         if timeframe:
             key = (key, timeframe)
+        call = method(request=request, metadata=self.metadata)
         with self.__lock:
-            if key in self.__subscribe_tasks:
+            if key in self.__subscribe_calls:
                 self.logger.warning("Подписка уже существует: %s", request)
                 return
             thread = Thread(
                 target=subscribe_worker,
-                kwargs={"flag": e},
+                kwargs={"c": call},
                 name=str(key),
                 daemon=True,
             )
-            self.__subscribe_tasks[key] = (e, thread)
+            self.__subscribe_calls[key] = call
+        call.add_callback(lambda: self.__subscribe_calls.pop(key, None))
         thread.start()
 
     def _unsubscribe_unary_stream(self, request):
@@ -280,10 +277,9 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         if timeframe:
             key = (key, timeframe)
         with self.__lock:
-            event, _ = self.__subscribe_tasks.pop(key, None)
-        if not event:
-            return
-        event.set()
+            call = self.__subscribe_calls.pop(key, None)
+            if call:
+                call.cancel()
 
     def _execute_order_trade_subscribe_request(
         self, request: OrderTradeRequest
