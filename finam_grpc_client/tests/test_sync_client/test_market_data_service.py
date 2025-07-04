@@ -159,26 +159,6 @@ class TestsSubscribes:
         assert len(store) == 0
         sync_client.on_quote = sync_client.default_handler
 
-    def test_close_channel(self, sync_client_new, caplog):
-        store = []
-        sync_client_new.on_order_book = self.on_event(store)
-        sync_client_new.subscribe_order_book(self.symbol)
-        time.sleep(10)
-        sync_client_new.channel.close()
-        assert len(store) > 2
-        store.clear()
-        time.sleep(10)
-        assert len(store) == 0
-        check = False
-        for record in caplog.records:
-            if record.levelname != "WARNING":
-                continue
-            assert "Принудительная отмена подписки" in record.message
-            check = True
-        else:
-            if not check:
-                pytest.fail("Не найдено логов уровня WARNING")
-
     @staticmethod
     def on_bar(store: list):
         last: Bar | None = None

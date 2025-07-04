@@ -6,10 +6,11 @@ from abc import ABC
 from logging import Logger
 
 from google.protobuf.message import Message
-from grpc import ssl_channel_credentials
+from grpc import StatusCode, ssl_channel_credentials
 from grpc.aio import (
     AioRpcError,
     Metadata,
+    UnaryStreamCall,
     UnaryStreamMultiCallable,
     UnaryUnaryMultiCallable,
     secure_channel,
@@ -39,8 +40,9 @@ from ..client_interfaces import AsyncClientInterface
 class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
     """Базовый класс асинхронного клиента."""
 
-    __subscribe_tasks: dict[
-        tuple[str, ...] | str | tuple[str, TimeFrame.ValueType], asyncio.Task
+    __subscribe_calls: dict[
+        tuple[str, ...] | str | tuple[str, TimeFrame.ValueType],
+        UnaryStreamCall,
     ] = {}
     """Задачи по обработке подписок."""
     """События баров."""
@@ -224,18 +226,19 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
     ):
         handler = self.__types_handlers[type(request)]
 
-        async def subscribe_worker():
+        async def subscribe_worker(c: UnaryStreamCall):
             try:
-                async for event in method(
-                    request=request, metadata=self.metadata
-                ):
+                async for event in c:
                     self.logger.debug("Получен новый event: [\n%s\n]", event)
                     h = getattr(self, handler)
                     t = asyncio.create_task(h(event))
                     self.__background_tasks.add(t)
                     t.add_done_callback(self.__background_tasks.discard)
             except AioRpcError as exc:
-                self.logger.warning(
+                if exc.code() == StatusCode.CANCELLED:
+                    self.logger.info("Отменена подписка %s", request)
+                    return
+                self.logger.error(
                     "При обработке подписки %s произошла ошибка: %s",
                     request,
                     exc,
@@ -247,11 +250,15 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         timeframe = getattr(request, "timeframe", None)
         if timeframe:
             key = (key, timeframe)
-        if key in self.__subscribe_tasks:
+        if key in self.__subscribe_calls:
             self.logger.warning("Подписка уже существует: %s", request)
             return
-        task = asyncio.create_task(subscribe_worker(), name=str(key))
-        self.__subscribe_tasks[key] = task
+        call = method(request=request, metadata=self.metadata)
+        task = asyncio.create_task(subscribe_worker(call), name=str(key))
+        self.__background_tasks.add(task)
+        task.add_done_callback(self.__background_tasks.discard)
+        call.add_done_callback(lambda x: self.__subscribe_calls.pop(key, None))
+        self.__subscribe_calls[key] = call
 
     def _unsubscribe_unary_stream(self, request):
         key = getattr(request, "symbol", None) or tuple(
@@ -260,10 +267,9 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         timeframe = getattr(request, "timeframe", None)
         if timeframe:
             key = (key, timeframe)
-        task = self.__subscribe_tasks.pop(key, None)
-        if not task:
-            return
-        task.cancel()
+        call = self.__subscribe_calls.pop(key, None)
+        if call:
+            call.cancel()
 
     async def _execute_order_trade_subscribe_request(
         self, request: OrderTradeRequest
