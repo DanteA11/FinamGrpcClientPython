@@ -93,8 +93,8 @@ class TestsSubscribes:
 
     async def test_subscribe_unsubscribe_bars(self, async_client):
         store: list[SubscribeBarsResponse] = []
-        await async_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
         async_client.on_bar = self.on_bar(store)
+        await async_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
         await asyncio.sleep(60)
         await async_client.unsubscribe_bars(
             self.symbol, TimeFrame.TIME_FRAME_M1
@@ -103,6 +103,48 @@ class TestsSubscribes:
         store.clear()
         await asyncio.sleep(60)
         assert len(store) == 0
+        async_client.on_bar = async_client.default_handler
+
+    async def test_subscribe_unsubscribe_several_bars(self, async_client):
+        store: list[SubscribeBarsResponse] = []
+        sym = "SBER@MISX"
+        async_client.on_bar = self.on_bar(store)
+        await async_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        await async_client.subscribe_bars(sym, TimeFrame.TIME_FRAME_M1)
+        await asyncio.sleep(60)
+        await async_client.unsubscribe_bars(
+            self.symbol, TimeFrame.TIME_FRAME_M1
+        )
+        await async_client.unsubscribe_bars(sym, TimeFrame.TIME_FRAME_M1)
+        assert len(store) == 4
+        store.clear()
+        await asyncio.sleep(60)
+        assert len(store) == 0
+        async_client.on_bar = async_client.default_handler
+
+    async def test_subscribe_unsubscribe_several_bars_with_separate_handlers(
+        self, async_client
+    ):
+        store_1: list[SubscribeBarsResponse] = []
+        store_2: list[SubscribeBarsResponse] = []
+        sym = "SBER@MISX"
+        async_client.on_bar = self.on_bar(store_1)
+        await async_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        await async_client.subscribe_bars(
+            sym, TimeFrame.TIME_FRAME_M1, handler=self.on_bar(store_2)
+        )
+        await asyncio.sleep(60)
+        await async_client.unsubscribe_bars(
+            self.symbol, TimeFrame.TIME_FRAME_M1
+        )
+        await async_client.unsubscribe_bars(sym, TimeFrame.TIME_FRAME_M1)
+        assert len(store_1) == 2
+        assert len(store_2) == 2
+        store_1.clear()
+        store_2.clear()
+        await asyncio.sleep(60)
+        assert len(store_1) == 0
+        assert len(store_2) == 0
         async_client.on_bar = async_client.default_handler
 
     async def test_subscribe_unsubscribe_order_book(self, async_client):
@@ -116,6 +158,20 @@ class TestsSubscribes:
         await asyncio.sleep(10)
         assert len(store) == 0
         async_client.on_order_book = async_client.default_handler
+
+    async def test_subscribe_unsubscribe_order_book_with_not_default_handler(
+        self, async_client
+    ):
+        store = []
+        await async_client.subscribe_order_book(
+            self.symbol, handler=self.on_event(store)
+        )
+        await asyncio.sleep(10)
+        await async_client.unsubscribe_order_book(self.symbol)
+        assert len(store) > 2
+        store.clear()
+        await asyncio.sleep(10)
+        assert len(store) == 0
 
     async def test_subscribe_unsubscribe_quote(self, async_client):
         store = []
@@ -166,18 +222,19 @@ class TestsSubscribes:
 
     @staticmethod
     def on_bar(store: list):
-        last: Bar | None = None
+        last: dict[str, Bar] = {}
 
         async def wrapped_func(event: SubscribeBarsResponse):
-            nonlocal last
-            if not last:
-                last = event.bars[-1]
-                store.append(event.bars[-1])
+            l = last.get(event.symbol)
+            r = event.bars[-1]
+            if not l:
+                last[event.symbol] = r
+                store.append(r)
                 return
-            if last.timestamp.seconds == event.bars[-1].timestamp.seconds:
+            if l.timestamp.seconds == r.timestamp.seconds:
                 return
-            store.append(event.bars[-1])
-            last = event.bars[-1]
+            last[event.symbol] = r
+            store.append(r)
 
         return wrapped_func
 

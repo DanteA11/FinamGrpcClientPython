@@ -1,14 +1,14 @@
+import os
+import pathlib
+
 import pytest
+from dotenv import load_dotenv
 
 from finam_grpc_client import FinamAsyncClient, FinamSyncClient
 
-token = ""
-acc_id = ""
-
-if not token or not acc_id:
-    pytest.exit(
-        "Не установлен token или acc_id. Установите их в файле conftest.py"
-    )
+load_dotenv(pathlib.Path(__file__).parent.parent.parent.joinpath(".env"))
+token = os.getenv("TOKEN")
+acc_id = os.getenv("ACCOUNT_ID")
 
 
 @pytest.fixture(scope="session")
@@ -18,6 +18,7 @@ def anyio_backend() -> str:
 
 @pytest.fixture(scope="session")
 async def async_client():
+    x = FinamAsyncClient(token)
     async with FinamAsyncClient(token) as client:
         yield client
 

@@ -21,11 +21,15 @@ service OrdersService {
   //
   // {
   //   "symbol": "SBER@MISX",
-  //   "quantity": "10",
+  //   "quantity": {
+  //			 "value": "10"
+  //		 },
   //   "side": "SIDE_BUY",
   //   "type": "ORDER_TYPE_LIMIT",
   //   "time_in_force": "TIME_IN_FORCE_DAY",
-  //   "limit_price": "150.50"
+  //   "limit_price": {
+  //			 "value": "150.50"
+  //		 }
   // }
   //
   // Поле account_id берется из URL-пути, остальные поля передаются в теле запроса
@@ -128,19 +132,19 @@ enum TimeInForce {
   TIME_IN_FORCE_UNSPECIFIED = 0;
   // До конца дня
   TIME_IN_FORCE_DAY = 1;
-  // Good till cancel
+  // Действителен до отмены
   TIME_IN_FORCE_GOOD_TILL_CANCEL = 2;
-  // Good till crossing
+  // Действителен до пересечения
   TIME_IN_FORCE_GOOD_TILL_CROSSING = 3;
-  // Extended hours
+  // Внебиржевая торговля
   TIME_IN_FORCE_EXT = 4;
   // На открытии биржи
   TIME_IN_FORCE_ON_OPEN = 5;
   // На закрытии биржи 
   TIME_IN_FORCE_ON_CLOSE = 6;
-  // Immediate or Cancel
+  // Исполнить немедленно или отменить
   TIME_IN_FORCE_IOC = 7;
-  // Fill or Kill
+  // Исполнить полностью или отменить
   TIME_IN_FORCE_FOK = 8;
 }
 
@@ -199,63 +203,62 @@ message Leg {
 enum OrderStatus {
   // Неопределенное значение
   ORDER_STATUS_UNSPECIFIED = 0;
-  // NEW
+  // Новая заявка
   ORDER_STATUS_NEW = 1;
-  // PARTIALLY_FILLED
+  // Частично исполненная
   ORDER_STATUS_PARTIALLY_FILLED = 2;
-  // FILLED
+  // Исполненная
   ORDER_STATUS_FILLED = 3;
-  // DONE_FOR_DAY 
+  // Действует в течение дня 
   ORDER_STATUS_DONE_FOR_DAY = 4;
-  // CANCELED 
+  // Отменена 
   ORDER_STATUS_CANCELED = 5;
-  // REPLACED
+  // Заменена на другую
   ORDER_STATUS_REPLACED = 6;
-  // PENDING_CANCEL
+  // Ожидает отмены
   ORDER_STATUS_PENDING_CANCEL = 7;
-  // REJECTED
+  // Отклонена
   ORDER_STATUS_REJECTED = 9;
-  // SUSPENDED
+  // Приостановлена
   ORDER_STATUS_SUSPENDED = 10;
-  // PENDING_NEW
+  // В ожидании новой
   ORDER_STATUS_PENDING_NEW = 11;
-  // EXPIRED
+  // Истекла
   ORDER_STATUS_EXPIRED = 13;
-  // FAILED
+  // Ошибка
   ORDER_STATUS_FAILED = 16;
-  // FORWARDING
+  // Пересылка
   ORDER_STATUS_FORWARDING = 17;
-  // WAIT
+  // Ожидает
   ORDER_STATUS_WAIT = 18;
-  // DENIED_BY_BROKER
+  // Отклонено брокером
   ORDER_STATUS_DENIED_BY_BROKER = 19;
-  // REJECTED_BY_EXCHANGE
+  // Отклонено биржей
   ORDER_STATUS_REJECTED_BY_EXCHANGE = 20;
-  // WATCHING
+  // Наблюдение
   ORDER_STATUS_WATCHING = 21;
-  // EXECUTED
+  // Исполнена
   ORDER_STATUS_EXECUTED = 22;
-  // DISABLED
+  // Отключена
   ORDER_STATUS_DISABLED = 23;
-  // LINK_WAIT
+  // Ожидание ссылки
   ORDER_STATUS_LINK_WAIT = 24;
-  // SL_GUARD_TIME
+  // Защитное время SL
   ORDER_STATUS_SL_GUARD_TIME = 27;
-  // SL_EXECUTED
+  // Исполнена по SL
   ORDER_STATUS_SL_EXECUTED = 28;
-  // SL_FORWARDING
+  // Пересылка SL
   ORDER_STATUS_SL_FORWARDING = 29;
-  // TP_GUARD_TIME
+  // Защитное время TP
   ORDER_STATUS_TP_GUARD_TIME = 30;
-  // TP_EXECUTED
+  // Исполнена по TP
   ORDER_STATUS_TP_EXECUTED = 31;
-  // TP_CORRECTION
+  // Коррекция TP
   ORDER_STATUS_TP_CORRECTION = 32;
-  // TP_FORWARDING
+  // Пересылка TP
   ORDER_STATUS_TP_FORWARDING = 33;
-  // TP_CORR_GUARD_TIME
+  // Коррекция TP в защитное время
   ORDER_STATUS_TP_CORR_GUARD_TIME = 34;
-
 }
 
 // Состояние заявки

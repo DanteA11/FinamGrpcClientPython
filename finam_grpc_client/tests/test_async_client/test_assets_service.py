@@ -62,7 +62,7 @@ class TestsAssetsService(TypeChecker):
         res = await async_client.get_options_chain(symbol)
         assert isinstance(res.symbol, str)
         for o in res.options:
-            assert o.symbol == symbol
+            assert o.symbol.startswith("LK")
             assert isinstance(o.symbol, str)
             assert isinstance(o.contract_size, Decimal)
             assert isinstance(o.trade_first_day, Date)

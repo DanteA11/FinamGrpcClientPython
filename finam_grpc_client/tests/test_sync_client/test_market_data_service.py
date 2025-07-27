@@ -90,14 +90,52 @@ class TestsSubscribes:
 
     def test_subscribe_unsubscribe_bars(self, sync_client):
         store: list[SubscribeBarsResponse] = []
-        sync_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
         sync_client.on_bar = self.on_bar(store)
+        sync_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
         time.sleep(60)
         sync_client.unsubscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
         assert len(store) == 2
         store.clear()
         time.sleep(60)
         assert len(store) == 0
+        sync_client.on_bar = sync_client.default_handler
+
+    def test_subscribe_unsubscribe_several_bars(self, sync_client):
+        store: list[SubscribeBarsResponse] = []
+        sym = "SBER@MISX"
+        sync_client.on_bar = self.on_bar(store)
+        sync_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        sync_client.subscribe_bars(sym, TimeFrame.TIME_FRAME_M1)
+        time.sleep(60)
+        sync_client.unsubscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        sync_client.unsubscribe_bars(sym, TimeFrame.TIME_FRAME_M1)
+        assert len(store) == 4
+        store.clear()
+        time.sleep(60)
+        assert len(store) == 0
+        sync_client.on_bar = sync_client.default_handler
+
+    def test_subscribe_unsubscribe_several_bars_with_separate_handlers(
+        self, sync_client
+    ):
+        store_1: list[SubscribeBarsResponse] = []
+        store_2: list[SubscribeBarsResponse] = []
+        sym = "SBER@MISX"
+        sync_client.on_bar = self.on_bar(store_1)
+        sync_client.subscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        sync_client.subscribe_bars(
+            sym, TimeFrame.TIME_FRAME_M1, handler=self.on_bar(store_2)
+        )
+        time.sleep(60)
+        sync_client.unsubscribe_bars(self.symbol, TimeFrame.TIME_FRAME_M1)
+        sync_client.unsubscribe_bars(sym, TimeFrame.TIME_FRAME_M1)
+        assert len(store_1) == 2
+        assert len(store_2) == 2
+        store_1.clear()
+        store_2.clear()
+        time.sleep(60)
+        assert len(store_1) == 0
+        assert len(store_2) == 0
         sync_client.on_bar = sync_client.default_handler
 
     def test_subscribe_unsubscribe_order_book(self, sync_client):
@@ -111,6 +149,20 @@ class TestsSubscribes:
         time.sleep(10)
         assert len(store) == 0
         sync_client.on_order_book = sync_client.default_handler
+
+    def test_subscribe_unsubscribe_order_book_with_not_default_handler(
+        self, sync_client
+    ):
+        store = []
+        sync_client.subscribe_order_book(
+            self.symbol, handler=self.on_event(store)
+        )
+        time.sleep(10)
+        sync_client.unsubscribe_order_book(self.symbol)
+        assert len(store) > 2
+        store.clear()
+        time.sleep(10)
+        assert len(store) == 0
 
     def test_subscribe_unsubscribe_quote(self, sync_client):
         store = []
@@ -161,20 +213,21 @@ class TestsSubscribes:
 
     @staticmethod
     def on_bar(store: list):
-        last: Bar | None = None
+        last: dict[str, Bar] = {}
         lock = threading.Lock()
 
         def wrapped_func(event: SubscribeBarsResponse):
-            nonlocal last
             with lock:
-                if not last:
-                    last = event.bars[-1]
-                    store.append(event.bars[-1])
+                l = last.get(event.symbol)
+                r = event.bars[-1]
+                if not l:
+                    last[event.symbol] = r
+                    store.append(r)
                     return
-                if last.timestamp.seconds == event.bars[-1].timestamp.seconds:
+                if l.timestamp.seconds == r.timestamp.seconds:
                     return
-                store.append(event.bars[-1])
-                last = event.bars[-1]
+                last[event.symbol] = r
+                store.append(r)
 
         return wrapped_func
 

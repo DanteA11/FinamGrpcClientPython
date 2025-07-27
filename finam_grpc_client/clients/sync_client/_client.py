@@ -401,22 +401,24 @@ class FinamSyncClient(BaseSyncClient):
         )
         return response
 
-    def subscribe_quote(self, *symbol):
+    def subscribe_quote(self, *symbol, handler=None):
         self.logger.info("Подписка на котировки: symbols=%s", symbol)
         self._subscribe_unary_stream(
             SubscribeQuoteRequest(symbols=symbol),
             self._market_data.SubscribeQuote,
+            handler,
         )
 
     def unsubscribe_quote(self, *symbol):
         self.logger.info("Отмена подписки на котировки: symbols=%s", symbol)
         self._unsubscribe_unary_stream(SubscribeQuoteRequest(symbols=symbol))
 
-    def subscribe_order_book(self, symbol):
+    def subscribe_order_book(self, symbol, *, handler=None):
         self.logger.info("Подписка на стакан: symbol=%s", symbol)
         self._subscribe_unary_stream(
             SubscribeOrderBookRequest(symbol=symbol),
             self._market_data.SubscribeOrderBook,
+            handler,
         )
 
     def unsubscribe_order_book(self, symbol):
@@ -425,11 +427,12 @@ class FinamSyncClient(BaseSyncClient):
             SubscribeOrderBookRequest(symbol=symbol)
         )
 
-    def subscribe_latest_trades(self, symbol):
+    def subscribe_latest_trades(self, symbol, *, handler=None):
         self.logger.info("Подписка на сделки: symbol=%s", symbol)
         self._subscribe_unary_stream(
             SubscribeLatestTradesRequest(symbol=symbol),
             self._market_data.SubscribeLatestTrades,
+            handler,
         )
 
     def unsubscribe_latest_trades(self, symbol):
@@ -438,13 +441,14 @@ class FinamSyncClient(BaseSyncClient):
             SubscribeLatestTradesRequest(symbol=symbol)
         )
 
-    def subscribe_bars(self, symbol, timeframe):
+    def subscribe_bars(self, symbol, timeframe, *, handler=None):
         self.logger.info(
             "Подписка на бары: symbol=%s, timeframe=%s", symbol, timeframe
         )
         self._subscribe_unary_stream(
             SubscribeBarsRequest(symbol=symbol, timeframe=timeframe),
             self._market_data.SubscribeBars,
+            handler,
         )
 
     def unsubscribe_bars(self, symbol, timeframe):

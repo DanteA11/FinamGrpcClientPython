@@ -140,7 +140,7 @@ message GetAssetResponse{
   string name = 7;
   // Кол-во десятичных знаков в цене
   int32 decimals = 10;
-  // Минимальный шаг цены
+  // Минимальный шаг цены. Для расчета финального ценового шага: min_step/(10ˆdecimals)
   int64 min_step = 11;
   // Кол-во штук в лоте
   google.type.Decimal lot_size = 9;
@@ -186,7 +186,7 @@ message OptionsChainRequest {
 
 // Информация о цепочке опционов
 message OptionsChainResponse {
-  // Символ опциона
+  // Символ базового актива опциона
   string symbol = 1;
   // Информация об опционе
   repeated Option options = 2;

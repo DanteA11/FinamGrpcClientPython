@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "finam-grpc-client"
-version = "3.1.4"
+version = "3.2.0"
 description = "Клиенты для взаимодействия с GRPC Api Finam"
 authors = ["Sergey Korepanov <sergeykorepanov1996@gmail.com>"]
 license = "LICENSE"
@@ -26,6 +26,7 @@ grpcio-tools = "^1.68.1"
 [tool.poetry.group.test.dependencies]
 pytest = "^8.3.4"
 anyio = "^4.8.0"
+python-dotenv = "^1.1.1"
 
 [build-system]
 requires = ["poetry-core"]

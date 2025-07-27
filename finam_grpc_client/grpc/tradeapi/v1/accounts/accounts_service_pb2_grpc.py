@@ -5,7 +5,7 @@ import warnings
 
 from finam_grpc_client.grpc.tradeapi.v1.accounts import accounts_service_pb2 as finam__grpc__client_dot_grpc_dot_tradeapi_dot_v1_dot_accounts_dot_accounts__service__pb2
 
-GRPC_GENERATED_VERSION = '1.72.1'
+GRPC_GENERATED_VERSION = '1.74.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 

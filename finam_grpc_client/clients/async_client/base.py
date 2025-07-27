@@ -4,6 +4,7 @@ import asyncio
 import logging
 from abc import ABC
 from logging import Logger
+from typing import Callable, Coroutine
 
 from google.protobuf.message import Message
 from grpc import StatusCode, ssl_channel_credentials
@@ -222,7 +223,10 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         return await self.__execute_request(method, message, self.metadata)
 
     def _subscribe_unary_stream(
-        self, request, method: UnaryStreamMultiCallable
+        self,
+        request,
+        method: UnaryStreamMultiCallable,
+        worker: Callable[[Message], Coroutine] | None = None,
     ):
         handler = self.__types_handlers[type(request)]
 
@@ -230,7 +234,7 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
             try:
                 async for event in c:
                     self.logger.debug("Получен новый event: [\n%s\n]", event)
-                    h = getattr(self, handler)
+                    h = worker or getattr(self, handler)
                     t = asyncio.create_task(h(event))
                     self.__background_tasks.add(t)
                     t.add_done_callback(self.__background_tasks.discard)

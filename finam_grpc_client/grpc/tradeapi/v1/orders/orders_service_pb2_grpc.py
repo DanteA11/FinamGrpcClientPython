@@ -5,7 +5,7 @@ import warnings
 
 from finam_grpc_client.grpc.tradeapi.v1.orders import orders_service_pb2 as finam__grpc__client_dot_grpc_dot_tradeapi_dot_v1_dot_orders_dot_orders__service__pb2
 
-GRPC_GENERATED_VERSION = '1.72.1'
+GRPC_GENERATED_VERSION = '1.74.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -75,11 +75,15 @@ class OrdersServiceServicer(object):
 
         {
         "symbol": "SBER@MISX",
-        "quantity": "10",
+        "quantity": {
+        			 "value": "10"
+        		 },
         "side": "SIDE_BUY",
         "type": "ORDER_TYPE_LIMIT",
         "time_in_force": "TIME_IN_FORCE_DAY",
-        "limit_price": "150.50"
+        "limit_price": {
+        			 "value": "150.50"
+        		 }
         }
 
         Поле account_id берется из URL-пути, остальные поля передаются в теле запроса

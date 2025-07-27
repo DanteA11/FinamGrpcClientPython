@@ -4,6 +4,7 @@ from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Event, Lock, Thread
+from typing import Any, Callable
 
 from google.protobuf.message import Message
 from grpc import (
@@ -31,7 +32,6 @@ from finam_grpc_client.grpc.tradeapi.v1.marketdata.marketdata_service_pb2 import
 )
 from finam_grpc_client.grpc.tradeapi.v1.orders.orders_service_pb2 import (
     OrderTradeRequest,
-    OrderTradeResponse,
 )
 
 from ..base import BaseClient
@@ -46,7 +46,7 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         Call,
     ] = {}
     """События для остановки задач по обработке подписок."""
-    __order_trade_requests: Queue[OrderTradeResponse] = Queue(maxsize=20)
+    __order_trade_requests: Queue[OrderTradeRequest] = Queue(maxsize=20)
     """Очередь для заявок на подписку/отписку."""
 
     def __init__(
@@ -228,7 +228,10 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         self.logger.info("Обработка событий подписок остановлена")
 
     def _subscribe_unary_stream(
-        self, request, method: UnaryStreamMultiCallable
+        self,
+        request,
+        method: UnaryStreamMultiCallable,
+        worker: Callable[[Message], Any] | None = None,
     ):
         handler = self.__types_handlers[type(request)]
 
@@ -236,7 +239,7 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
             try:
                 for event in c:
                     self.logger.debug("Получен новый event: [\n%s\n]", event)
-                    h = getattr(self, handler)
+                    h = worker or getattr(self, handler)
                     self.__background_tasks.submit(h, event)
             except RpcError as exc:
                 if exc.code() == StatusCode.CANCELLED:

@@ -343,11 +343,16 @@ class SyncClientInterface(ABC):
         """
 
     @abstractmethod
-    def subscribe_quote(self, *symbol: str) -> None:
+    def subscribe_quote(
+        self,
+        *symbol: str,
+        handler: Callable[[SubscribeQuoteResponse], Any] | None = None
+    ) -> None:
         """
         Подписка на котировки по инструменту.
 
         :param symbol: Символ инструмента.
+        :param handler: Кастомный обработчик. Используется вместо обработчика `on_quote`.
         """
 
     @abstractmethod
@@ -362,11 +367,17 @@ class SyncClientInterface(ABC):
         """
 
     @abstractmethod
-    def subscribe_order_book(self, symbol: str) -> None:
+    def subscribe_order_book(
+        self,
+        symbol: str,
+        *,
+        handler: Callable[[SubscribeOrderBookResponse], Any] | None = None
+    ) -> None:
         """
         Подписка на стакан по инструменту.
 
         :param symbol: Символ инструмента.
+        :param handler: Кастомный обработчик. Используется вместо обработчика `on_order_book`.
         """
 
     @abstractmethod
@@ -378,11 +389,17 @@ class SyncClientInterface(ABC):
         """
 
     @abstractmethod
-    def subscribe_latest_trades(self, symbol: str) -> None:
+    def subscribe_latest_trades(
+        self,
+        symbol: str,
+        *,
+        handler: Callable[[SubscribeLatestTradesResponse], Any] | None = None
+    ) -> None:
         """
         Подписка на сделки по инструменту.
 
         :param symbol: Символ инструмента.
+        :param handler: Кастомный обработчик. Используется вместо обработчика `on_latest_trade`.
         """
 
     @abstractmethod
@@ -395,13 +412,18 @@ class SyncClientInterface(ABC):
 
     @abstractmethod
     def subscribe_bars(
-        self, symbol: str, timeframe: TimeFrame.ValueType
+        self,
+        symbol: str,
+        timeframe: TimeFrame.ValueType,
+        *,
+        handler: Callable[[SubscribeBarsResponse], Any] | None = None
     ) -> None:
         """
         Подписка на бары.
 
         :param symbol: Символ инструмента.
         :param timeframe: Необходимый таймфрейм.
+        :param handler: Кастомный обработчик. Используется вместо обработчика `on_bar`.
         """
 
     @abstractmethod
@@ -620,25 +642,49 @@ class AsyncClientInterface(SyncClientInterface, ABC):
     ) -> GetAssetResponse: ...
 
     @abstractmethod
-    async def subscribe_quote(self, *symbol) -> None: ...
+    async def subscribe_quote(
+        self,
+        *symbol,
+        handler: Callable[[SubscribeQuoteResponse], Coroutine] | None = None
+    ) -> None: ...
 
     @abstractmethod
     async def unsubscribe_quote(self, *symbol) -> None: ...
 
     @abstractmethod
-    async def subscribe_order_book(self, symbol) -> None: ...
+    async def subscribe_order_book(
+        self,
+        symbol,
+        *,
+        handler: (
+            Callable[[SubscribeOrderBookResponse], Coroutine] | None
+        ) = None
+    ) -> None: ...
 
     @abstractmethod
     async def unsubscribe_order_book(self, symbol) -> None: ...
 
     @abstractmethod
-    async def subscribe_latest_trades(self, symbol) -> None: ...
+    async def subscribe_latest_trades(
+        self,
+        symbol,
+        *,
+        handler: (
+            Callable[[SubscribeLatestTradesResponse], Coroutine] | None
+        ) = None
+    ) -> None: ...
 
     @abstractmethod
     async def unsubscribe_latest_trades(self, symbol) -> None: ...
 
     @abstractmethod
-    async def subscribe_bars(self, symbol, timeframe) -> None: ...
+    async def subscribe_bars(
+        self,
+        symbol,
+        timeframe,
+        *,
+        handler: Callable[[SubscribeBarsResponse], Coroutine] | None = None
+    ) -> None: ...
 
     @abstractmethod
     def unsubscribe_bars(self, symbol, timeframe) -> None: ...

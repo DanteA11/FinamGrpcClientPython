@@ -144,7 +144,7 @@ class GetAssetResponse(google.protobuf.message.Message):
     decimals: builtins.int
     """Кол-во десятичных знаков в цене"""
     min_step: builtins.int
-    """Минимальный шаг цены"""
+    """Минимальный шаг цены. Для расчета финального ценового шага: min_step/(10ˆdecimals)"""
     @property
     def lot_size(self) -> google.type.decimal_pb2.Decimal:
         """Кол-во штук в лоте"""
@@ -285,7 +285,7 @@ class OptionsChainResponse(google.protobuf.message.Message):
     SYMBOL_FIELD_NUMBER: builtins.int
     OPTIONS_FIELD_NUMBER: builtins.int
     symbol: builtins.str
-    """Символ опциона"""
+    """Символ базового актива опциона"""
     @property
     def options(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Option]:
         """Информация об опционе"""

@@ -251,7 +251,7 @@ message Quote {
   message Option {
     // Открытый интерес
     google.type.Decimal open_interest = 1;
-    // Implied volatility
+    // Подразумеваемая волатильность
     google.type.Decimal implied_volatility = 2;
     // Теоретическая цена
     google.type.Decimal theoretical_price = 3;
