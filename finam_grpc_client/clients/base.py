@@ -78,19 +78,21 @@ class BaseClient(Generic[_C], ABC):
     def channel(self) -> _C:
         return self.__channel
 
-    def _start(self):
+    def _start(self) -> bool:
         self.logger.warning("Начало работы")
         if self.state:
             self.logger.warning("Уже запущено")
-            return
+            return False
         self.__state = State.Started
+        return True
 
-    def _stop(self):
+    def _stop(self) -> bool:
         self.logger.warning("Завершение работы")
         if not self.state:
             self.logger.warning("Уже остановлено")
-            return
+            return False
         self.__state = State.Stopped
+        return True
 
     @staticmethod
     def _create_interval(start_time, end_time):

@@ -46,7 +46,6 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         UnaryStreamCall,
     ] = {}
     """Задачи по обработке подписок."""
-    """События баров."""
     __order_trade_requests: asyncio.Queue[OrderTradeRequest] = asyncio.Queue(
         maxsize=20
     )
@@ -145,7 +144,8 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         self.__on_order_trade = value
 
     async def start(self):
-        self._start()
+        if not self._start():
+            return
         await self._get_session_token()
         self._start_subscribe_workers()
         if self.__refresh_token_task is None:
@@ -156,12 +156,14 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         self.account_ids = tuple(details.account_ids)
 
     async def stop(self):
-        self._stop()
+        if not self._stop():
+            return
         await self.channel.close(None)
         self.logger.info("Соединение закрыто")
 
     def _stop(self):
-        super()._stop()
+        if not super()._stop():
+            return False
         self._stop_subscribe_workers()
         self.__on_quote = self.default_handler
         self.__on_order_book = self.default_handler
@@ -170,6 +172,7 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         self.__on_order_trade = self.default_handler
         if self.__refresh_token_task is not None:
             self.__refresh_token_task.cancel()
+        return True
 
     async def _get_session_token(self) -> None:
         """Получение токена сессии"""
@@ -229,40 +232,62 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
         worker: Callable[[Message], Coroutine] | None = None,
     ):
         handler = self.__types_handlers[type(request)]
-
-        async def subscribe_worker(c: UnaryStreamCall):
-            try:
-                async for event in c:
-                    self.logger.debug("Получен новый event: [\n%s\n]", event)
-                    h = worker or getattr(self, handler)
-                    t = asyncio.create_task(h(event))
-                    self.__background_tasks.add(t)
-                    t.add_done_callback(self.__background_tasks.discard)
-            except AioRpcError as exc:
-                if exc.code() == StatusCode.CANCELLED:
-                    self.logger.info("Отменена подписка %s", request)
-                    return
-                self.logger.error(
-                    "При обработке подписки %s произошла ошибка: %s",
-                    request,
-                    exc,
-                )
-
         key = getattr(request, "symbol", None) or tuple(
             getattr(request, "symbols")
         )
         timeframe = getattr(request, "timeframe", None)
+
         if timeframe:
             key = (key, timeframe)
         if key in self.__subscribe_calls:
             self.logger.warning("Подписка уже существует: %s", request)
             return
-        call = method(request=request, metadata=self.metadata)
-        task = asyncio.create_task(subscribe_worker(call), name=str(key))
+
+        async def subscribe_worker():
+            count = 0
+            while True:
+                try:
+                    call = method(request=request, metadata=self.metadata)
+                    self.__subscribe_calls[key] = call
+                    call.add_done_callback(
+                        lambda x: self.__subscribe_calls.pop(key, None)
+                    )
+                    count = 0
+                    async for event in call:
+                        self.logger.debug(
+                            "Получен новый event: [\n%s\n]", event
+                        )
+                        h = worker or getattr(self, handler)
+                        t = asyncio.create_task(h(event))
+                        self.__background_tasks.add(t)
+                        t.add_done_callback(self.__background_tasks.discard)
+                except AioRpcError as exc:
+                    match exc.code():
+                        case StatusCode.CANCELLED:
+                            self.logger.info(
+                                "Принудительная отмена подписки %s", request
+                            )
+                            break
+                        case StatusCode.INTERNAL | StatusCode.UNKNOWN:
+                            count += 1
+                            if count > 3:
+                                self.logger.error("Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано", request)
+                                break
+                            self.logger.warning(
+                                "Разрыв соединения подписки %s с ошибкой: %s. Переподключение.",
+                                request,
+                                exc,
+                            )
+                            continue
+                    self.logger.error(
+                        "При обработке подписки на ордера и сделки произошла ошибка: %s",
+                        exc,
+                    )
+                    break
+
+        task = asyncio.create_task(subscribe_worker(), name=str(key))
         self.__background_tasks.add(task)
         task.add_done_callback(self.__background_tasks.discard)
-        call.add_done_callback(lambda x: self.__subscribe_calls.pop(key, None))
-        self.__subscribe_calls[key] = call
 
     def _unsubscribe_unary_stream(self, request):
         key = getattr(request, "symbol", None) or tuple(
@@ -301,17 +326,44 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
             while self.state:
                 yield await self.__order_trade_requests.get()
 
-        try:
-            async for event in self._orders.SubscribeOrderTrade(
-                request_iterator=request_iterator(),
-                metadata=self.metadata,
-            ):
-                self.logger.debug("Получен новый event: [\n%s\n]", event)
-                task = asyncio.create_task(self.on_order_trade(event))
-                self.__background_tasks.add(task)
-                task.add_done_callback(self.__background_tasks.discard)
-        except AioRpcError as exc:
-            self.logger.warning("Произошла ошибка: %s", exc)
+        count = 0
+        while True:
+            try:
+                call = self._orders.SubscribeOrderTrade(
+                    request_iterator=request_iterator(),
+                    metadata=self.metadata,
+                )
+                count = 0
+                async for event in call:
+                    self.logger.debug("Получен новый OrderTrade: [\n%s\n]", event)
+                    task = asyncio.create_task(self.on_order_trade(event))
+                    self.__background_tasks.add(task)
+                    task.add_done_callback(self.__background_tasks.discard)
+            except AioRpcError as exc:
+                match exc.code():
+                    case StatusCode.CANCELLED:
+                        self.logger.info(
+                            "Принудительная отмена подписки на ордера и сделки."
+                        )
+                        break
+                    case StatusCode.INTERNAL | StatusCode.UNKNOWN:
+                        count += 1
+                        if count > 3:
+                            self.logger.error(
+                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано")
+                            await self.stop()
+                            break
+                        self.logger.warning(
+                            "Разрыв соединения подписки на ордера и сделки с ошибкой: %s. Переподключение.",
+                            exc,
+                        )
+                        continue
+                self.logger.error(
+                    "При обработке подписки на ордера и сделки произошла ошибка: %s",
+                    exc,
+                )
+                await self.stop()
+                break
 
     @staticmethod
     async def __execute_request(

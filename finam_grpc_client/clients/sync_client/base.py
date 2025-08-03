@@ -2,6 +2,7 @@ import logging
 import time
 from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from queue import Queue
 from threading import Event, Lock, Thread
 from typing import Any, Callable
@@ -138,7 +139,8 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         self.__on_order_trade = value
 
     def start(self):
-        self._start()
+        if not self._start():
+            return
         self._get_session_token()
         self._start_subscribe_workers()
         if self.__refresh_token_task is None:
@@ -152,7 +154,8 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         self.account_ids = tuple(details.account_ids)
 
     def stop(self):
-        self._stop()
+        if not self._stop():
+            return
         self._stop_subscribe_workers()
         for c in self.__subscribe_calls.values():
             c.cancel()
@@ -234,42 +237,64 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
         worker: Callable[[Message], Any] | None = None,
     ):
         handler = self.__types_handlers[type(request)]
-
-        def subscribe_worker(c):
-            try:
-                for event in c:
-                    self.logger.debug("Получен новый event: [\n%s\n]", event)
-                    h = worker or getattr(self, handler)
-                    self.__background_tasks.submit(h, event)
-            except RpcError as exc:
-                if exc.code() == StatusCode.CANCELLED:
-                    self.logger.info("Отменена подписка %s", request)
-                    return
-                self.logger.error(
-                    "При обработке подписки %s произошла ошибка: %s",
-                    request,
-                    exc,
-                )
-
         key = getattr(request, "symbol", None) or tuple(
             getattr(request, "symbols")
         )
         timeframe = getattr(request, "timeframe", None)
+
         if timeframe:
             key = (key, timeframe)
-        call = method(request=request, metadata=self.metadata)
+
+        def subscribe_worker():
+            count = 0
+            while True:
+                try:
+                    call = method(request=request, metadata=self.metadata)
+                    self.__subscribe_calls[key] = call
+                    call.add_callback(
+                        lambda: self.__subscribe_calls.pop(key, None)
+                    )
+                    count = 0
+                    for event in call:
+                        self.logger.debug(
+                            "Получен новый event: [\n%s\n]", event
+                        )
+                        h = worker or getattr(self, handler)
+                        self.__background_tasks.submit(h, event)
+                except RpcError as exc:
+                    match exc.code():
+                        case StatusCode.CANCELLED:
+                            self.logger.info(
+                                "Принудительная отмена подписки %s.", request
+                            )
+                            break
+                        case StatusCode.INTERNAL | StatusCode.UNKNOWN:
+                            count += 1
+                            if count > 3:
+                                self.logger.error("Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано", request)
+                                break
+                            self.logger.warning(
+                                "Разрыв соединения подписки %s с ошибкой: %s. Переподключение.",
+                                request,
+                                exc,
+                            )
+                            continue
+
+                    self.logger.error(
+                        "При обработке подписки на ордера и сделки произошла ошибка: %s",
+                        exc,
+                    )
+                    break
+
         with self.__lock:
             if key in self.__subscribe_calls:
                 self.logger.warning("Подписка уже существует: %s", request)
                 return
             thread = Thread(
                 target=subscribe_worker,
-                kwargs={"c": call},
                 name=str(key),
                 daemon=True,
             )
-            self.__subscribe_calls[key] = call
-        call.add_callback(lambda: self.__subscribe_calls.pop(key, None))
         thread.start()
 
     def _unsubscribe_unary_stream(self, request):
@@ -305,25 +330,46 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
             while self.state:
                 yield self.__order_trade_requests.get()
 
-        try:
-            for event in self._orders.SubscribeOrderTrade(
-                request_iterator=request_iterator(),
-                metadata=self.metadata,
-            ):
-                if e.is_set():
-                    break
-                self.logger.debug("Получен новый event: [\n%s\n]", event)
-                self.__background_tasks.submit(self.on_order_trade, event)
-        except RpcError as exc:
-            if exc.code() == StatusCode.CANCELLED:
-                self.logger.warning(
-                    "Принудительная отмена подписки на ордера и сделки."
+        count = 0
+        while True:
+            try:
+                call = self._orders.SubscribeOrderTrade(
+                    request_iterator=request_iterator(),
+                    metadata=self.metadata,
                 )
-                return
-            self.logger.warning(
-                "При обработке подписки на ордера и сделки произошла ошибка: %s",
-                exc,
-            )
+                count = 0
+                for event in call:
+                    if e.is_set():
+                        break
+                    self.logger.debug("Получен новый OrderTrade: [\n%s\n]", event)
+                    self.__background_tasks.submit(self.on_order_trade, event)
+            except RpcError as exc:
+                match exc.code():
+                    case StatusCode.CANCELLED:
+                        self.logger.info(
+                            "Принудительная отмена подписки на ордера и сделки."
+                        )
+                        break
+                    case StatusCode.INTERNAL | StatusCode.UNKNOWN:
+                        count += 1
+                        if count > 3:
+                            self.logger.error(
+                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано")
+                            self.stop()
+                            break
+                        self.logger.warning(
+                            "Разрыв соединения подписки на ордера и сделки с ошибкой: %s. Переподключение.",
+                            exc,
+                        )
+                        continue
+
+                self.logger.error(
+                    "При обработке подписки на ордера и сделки произошла ошибка: %s",
+                    exc,
+                )
+                self.stop()
+                break
+
 
     @staticmethod
     def __execute_request(
