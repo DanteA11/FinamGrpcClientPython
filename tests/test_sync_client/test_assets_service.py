@@ -11,7 +11,7 @@ from finam_grpc_client.grpc.tradeapi.v1.assets.assets_service_pb2 import (
     Longable,
     Shortable,
 )
-from finam_grpc_client.tests.type_checker import TypeChecker
+from tests.type_checker import TypeChecker
 
 
 class TestsAssetsService(TypeChecker):

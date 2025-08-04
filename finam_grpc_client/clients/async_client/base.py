@@ -271,7 +271,10 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
                         case StatusCode.INTERNAL | StatusCode.UNKNOWN:
                             count += 1
                             if count > 3:
-                                self.logger.error("Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано", request)
+                                self.logger.error(
+                                    "Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано",
+                                    request,
+                                )
                                 break
                             self.logger.warning(
                                 "Разрыв соединения подписки %s с ошибкой: %s. Переподключение.",
@@ -335,7 +338,9 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
                 )
                 count = 0
                 async for event in call:
-                    self.logger.debug("Получен новый OrderTrade: [\n%s\n]", event)
+                    self.logger.debug(
+                        "Получен новый OrderTrade: [\n%s\n]", event
+                    )
                     task = asyncio.create_task(self.on_order_trade(event))
                     self.__background_tasks.add(task)
                     task.add_done_callback(self.__background_tasks.discard)
@@ -350,7 +355,8 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
                         count += 1
                         if count > 3:
                             self.logger.error(
-                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано")
+                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано"
+                            )
                             await self.stop()
                             break
                         self.logger.warning(

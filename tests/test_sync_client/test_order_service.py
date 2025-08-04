@@ -1,3 +1,4 @@
+import time
 from random import choice
 
 import pytest
@@ -10,12 +11,14 @@ from finam_grpc_client.grpc.tradeapi.v1.assets.assets_service_pb2 import (
 )
 from finam_grpc_client.grpc.tradeapi.v1.orders.orders_service_pb2 import (
     OrderStatus,
+    OrderTradeResponse,
     OrderType,
     StopCondition,
     TimeInForce,
 )
 from finam_grpc_client.grpc.tradeapi.v1.side_pb2 import Side
-from finam_grpc_client.tests.type_checker import TypeChecker
+from tests.type_checker import TypeChecker
+from finam_grpc_client.types import DataType
 
 
 class TestsOrdersService(TypeChecker):
@@ -54,6 +57,8 @@ class TestsOrdersService(TypeChecker):
         assert cancel.status == OrderStatus.ORDER_STATUS_CANCELED
 
     def test_place_cancel_order_buy_stop(self, sync_client, account_id):
+        if not self.check_longable(sync_client, account_id):
+            pytest.skip(f"По {self.symbol} лонг не разрешен")
         place = self.create_stop_order_by(sync_client, account_id)
         self.check_order_state_type(place)
         assert place.status == OrderStatus.ORDER_STATUS_WATCHING
@@ -171,7 +176,10 @@ class TestsOrdersService(TypeChecker):
 
     @classmethod
     def get_min_order_book_price(cls, client):
-        order_book = client.get_order_book(cls.symbol)
+        try:
+            order_book = client.get_order_book(cls.symbol)
+        except RpcError:
+            return None
         min_row = min(
             order_book.orderbook.rows, key=lambda x: float(x.price.value)
         )
@@ -179,7 +187,10 @@ class TestsOrdersService(TypeChecker):
 
     @classmethod
     def get_max_order_book_price(cls, client):
-        order_book = client.get_order_book(cls.symbol)
+        try:
+            order_book = client.get_order_book(cls.symbol)
+        except RpcError:
+            return None
         max_row = max(
             order_book.orderbook.rows, key=lambda x: float(x.price.value)
         )
@@ -226,3 +237,42 @@ class TestsOrdersService(TypeChecker):
             legs=None,
             client_order_id=None,
         )
+
+
+class TestSubscribe:
+    def test_subscribe_order_limit(self, sync_client, account_id):
+        self.subscribe_order(
+            sync_client, account_id, TestsOrdersService.create_limit_order_buy
+        )
+
+    def test_subscribe_order_stop(self, sync_client, account_id):
+        self.subscribe_order(
+            sync_client, account_id, TestsOrdersService.create_stop_order_by
+        )
+
+    @classmethod
+    def subscribe_order(cls, client, acc_id, func):
+        store: list[OrderTradeResponse] = []
+        client.subscribe_order_trade(acc_id, DataType.DATA_TYPE_ORDERS)
+        time.sleep(1)
+        client.on_order_trade = cls.on_event(store)
+        place = func(client, acc_id)
+        time.sleep(2)
+        cancel = client.cancel_order(acc_id, place.order_id)
+        time.sleep(2)
+        client.unsubscribe_order_trade(acc_id, DataType.DATA_TYPE_ORDERS)
+        assert len(store) == 2
+        for e, order in zip(store, (place, cancel)):
+            o = next(
+                filter(lambda x: x.order_id == order.order_id, e.orders), None
+            )
+            assert o is not None
+            assert order.status == o.status
+
+    @staticmethod
+    def on_event(store: list):
+
+        def handler(event: OrderTradeResponse):
+            store.append(event)
+
+        return handler

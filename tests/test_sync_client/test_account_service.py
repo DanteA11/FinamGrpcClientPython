@@ -3,16 +3,15 @@ import datetime
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.type.decimal_pb2 import Decimal
-from grpc.aio import AioRpcError
+from grpc import RpcError
 
-from finam_grpc_client.tests.type_checker import TypeChecker
+from tests.type_checker import TypeChecker
 
 
-@pytest.mark.anyio
 class TestsAccountService(TypeChecker):
-    async def test_get_account_info(self, async_client, account_id):
-        assert account_id in async_client.account_ids
-        res = await async_client.get_account_info(account_id)
+    def test_get_account_info(self, sync_client, account_id):
+        assert account_id in sync_client.account_ids
+        res = sync_client.get_account_info(account_id)
         assert isinstance(res.account_id, str)
         assert isinstance(res.type, str)
         assert isinstance(res.status, str)
@@ -25,11 +24,11 @@ class TestsAccountService(TypeChecker):
         assert res.account_id == account_id
         assert res.status == "ACCOUNT_ACTIVE"
 
-    async def test_get_account_info_negative(self, async_client):
+    def test_get_account_info_negative(self, sync_client):
         account_id = "111111"
-        assert account_id not in async_client.account_ids
-        with pytest.raises(AioRpcError) as exc:
-            await async_client.get_account_info(account_id)
+        assert account_id not in sync_client.account_ids
+        with pytest.raises(RpcError) as exc:
+            sync_client.get_account_info(account_id)
         assert (
             f"Account with id {account_id} is not found" in exc.value.details()
         )
@@ -37,33 +36,29 @@ class TestsAccountService(TypeChecker):
     @pytest.mark.xfail(
         reason="Нет сделок на аккаунте за последние 52 недели", run=True
     )
-    async def test_get_trades(self, async_client, account_id):
+    def test_get_trades(self, sync_client, account_id):
         end_time = datetime.datetime.now()
         start_time = end_time - datetime.timedelta(weeks=52)
-        res = await async_client.get_trades(
-            account_id, 1, start_time, end_time
-        )
+        res = sync_client.get_trades(account_id, 1, start_time, end_time)
         for t in res.trades:
             self.check_account_trade_type(t)
         assert len(res.trades) > 0
         assert len(res.trades) == 1
 
-    async def test_get_trades_negative(self, async_client, account_id):
+    def test_get_trades_negative(self, sync_client, account_id):
         end_time = datetime.datetime.now()
         start_time = end_time - datetime.timedelta(weeks=52)
-        with pytest.raises(AioRpcError) as exc:
-            await async_client.get_trades(account_id, 1, end_time, start_time)
+        with pytest.raises(RpcError) as exc:
+            sync_client.get_trades(account_id, 1, end_time, start_time)
         assert "'StartTime' must be less then 'endTime'" in exc.value.details()
 
     @pytest.mark.xfail(
         reason="Нет транзакций на аккаунте за последние 52 недели", run=True
     )
-    async def test_get_transactions(self, async_client, account_id):
+    def test_get_transactions(self, sync_client, account_id):
         end_time = datetime.datetime.now()
         start_time = end_time - datetime.timedelta(weeks=52)
-        res = await async_client.get_transactions(
-            account_id, 1, start_time, end_time
-        )
+        res = sync_client.get_transactions(account_id, 1, start_time, end_time)
         for t in res.transactions:
             assert isinstance(t.id, str)
             assert isinstance(t.category, str)
@@ -77,11 +72,9 @@ class TestsAccountService(TypeChecker):
         assert len(res.transactions) > 0
         assert len(res.transactions) == 1
 
-    async def test_get_transactions_negative(self, async_client, account_id):
+    def test_get_transactions_negative(self, sync_client, account_id):
         end_time = datetime.datetime.now()
         start_time = end_time - datetime.timedelta(weeks=52)
-        with pytest.raises(AioRpcError) as exc:
-            await async_client.get_transactions(
-                account_id, 1, end_time, start_time
-            )
+        with pytest.raises(RpcError) as exc:
+            sync_client.get_transactions(account_id, 1, end_time, start_time)
         assert "'StartTime' must be less then 'endTime'" in exc.value.details()

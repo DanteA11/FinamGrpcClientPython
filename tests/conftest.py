@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from finam_grpc_client import FinamAsyncClient, FinamSyncClient
 
-load_dotenv(pathlib.Path(__file__).parent.parent.parent.joinpath(".env"))
+load_dotenv(pathlib.Path(__file__).parent.parent.joinpath(".env"))
 token = os.getenv("TOKEN")
 acc_id = os.getenv("ACCOUNT_ID")
 

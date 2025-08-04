@@ -1,3 +1,4 @@
+import asyncio
 from random import choice
 
 import pytest
@@ -10,12 +11,14 @@ from finam_grpc_client.grpc.tradeapi.v1.assets.assets_service_pb2 import (
 )
 from finam_grpc_client.grpc.tradeapi.v1.orders.orders_service_pb2 import (
     OrderStatus,
+    OrderTradeResponse,
     OrderType,
     StopCondition,
     TimeInForce,
 )
 from finam_grpc_client.grpc.tradeapi.v1.side_pb2 import Side
-from finam_grpc_client.tests.type_checker import TypeChecker
+from tests.type_checker import TypeChecker
+from finam_grpc_client.types import DataType
 
 
 @pytest.mark.anyio
@@ -61,9 +64,6 @@ class TestsOrdersService(TypeChecker):
     async def test_place_cancel_order_buy_stop(self, async_client, account_id):
         if not await self.check_longable(async_client, account_id):
             pytest.skip(f"По {self.symbol} лонг не разрешен")
-        stop_price = await self.get_max_order_book_price(async_client)
-        if not stop_price:
-            pytest.skip("Нет цены для выставления заявки")
         place = await self.create_stop_order_by(async_client, account_id)
         self.check_order_state_type(place)
         assert place.status == OrderStatus.ORDER_STATUS_WATCHING
@@ -191,7 +191,10 @@ class TestsOrdersService(TypeChecker):
 
     @classmethod
     async def get_min_order_book_price(cls, client):
-        order_book = await client.get_order_book(cls.symbol)
+        try:
+            order_book = await client.get_order_book(cls.symbol)
+        except AioRpcError:
+            return None
         min_row = min(
             order_book.orderbook.rows, key=lambda x: float(x.price.value)
         )
@@ -199,7 +202,10 @@ class TestsOrdersService(TypeChecker):
 
     @classmethod
     async def get_max_order_book_price(cls, client):
-        order_book = await client.get_order_book(cls.symbol)
+        try:
+            order_book = await client.get_order_book(cls.symbol)
+        except AioRpcError:
+            return None
         max_row = max(
             order_book.orderbook.rows, key=lambda x: float(x.price.value)
         )
@@ -246,3 +252,43 @@ class TestsOrdersService(TypeChecker):
             legs=None,
             client_order_id=None,
         )
+
+
+@pytest.mark.anyio
+class TestSubscribe:
+    async def test_subscribe_order_limit(self, async_client, account_id):
+        await self.subscribe_order(
+            async_client, account_id, TestsOrdersService.create_limit_order_buy
+        )
+
+    async def test_subscribe_order_stop(self, async_client, account_id):
+        await self.subscribe_order(
+            async_client, account_id, TestsOrdersService.create_stop_order_by
+        )
+
+    @classmethod
+    async def subscribe_order(cls, client, acc_id, func):
+        store: list[OrderTradeResponse] = []
+        await client.subscribe_order_trade(acc_id, DataType.DATA_TYPE_ORDERS)
+        await asyncio.sleep(1)
+        client.on_order_trade = cls.on_event(store)
+        place = await func(client, acc_id)
+        await asyncio.sleep(2)
+        cancel = await client.cancel_order(acc_id, place.order_id)
+        await asyncio.sleep(2)
+        await client.unsubscribe_order_trade(acc_id, DataType.DATA_TYPE_ORDERS)
+        assert len(store) == 2
+        for e, order in zip(store, (place, cancel)):
+            o = next(
+                filter(lambda x: x.order_id == order.order_id, e.orders), None
+            )
+            assert o is not None
+            assert order.status == o.status
+
+    @staticmethod
+    def on_event(store: list):
+
+        async def handler(event: OrderTradeResponse):
+            store.append(event)
+
+        return handler

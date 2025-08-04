@@ -271,7 +271,10 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                         case StatusCode.INTERNAL | StatusCode.UNKNOWN:
                             count += 1
                             if count > 3:
-                                self.logger.error("Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано", request)
+                                self.logger.error(
+                                    "Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано",
+                                    request,
+                                )
                                 break
                             self.logger.warning(
                                 "Разрыв соединения подписки %s с ошибкой: %s. Переподключение.",
@@ -341,7 +344,9 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                 for event in call:
                     if e.is_set():
                         break
-                    self.logger.debug("Получен новый OrderTrade: [\n%s\n]", event)
+                    self.logger.debug(
+                        "Получен новый OrderTrade: [\n%s\n]", event
+                    )
                     self.__background_tasks.submit(self.on_order_trade, event)
             except RpcError as exc:
                 match exc.code():
@@ -354,7 +359,8 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                         count += 1
                         if count > 3:
                             self.logger.error(
-                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано")
+                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано"
+                            )
                             self.stop()
                             break
                         self.logger.warning(
@@ -369,7 +375,6 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                 )
                 self.stop()
                 break
-
 
     @staticmethod
     def __execute_request(

@@ -10,7 +10,7 @@ from finam_grpc_client.grpc.tradeapi.v1.marketdata.marketdata_service_pb2 import
     SubscribeBarsResponse,
     TimeFrame,
 )
-from finam_grpc_client.tests.type_checker import TypeChecker
+from tests.type_checker import TypeChecker
 
 
 @pytest.mark.anyio
@@ -69,7 +69,10 @@ class TestsMarketDataService(TypeChecker):
         assert res.symbol == symbol
 
     async def test_get_order_book(self, async_client):
-        res = await async_client.get_order_book(self.symbol)
+        try:
+            res = await async_client.get_order_book(self.symbol)
+        except AioRpcError:
+            pytest.skip("Нет стакана")
         assert isinstance(res.symbol, str)
         for r in res.orderbook.rows:
             self.check_order_book_row_type(r)
@@ -197,7 +200,7 @@ class TestsSubscribes:
         assert len(store) == 0
         async_client.on_latest_trade = async_client.default_handler
 
-    async def test_dooble_subscribe(self, async_client, caplog):
+    async def test_double_subscribe(self, async_client, caplog):
         store = []
         async_client.on_quote = self.on_event(store)
         await async_client.subscribe_quote(self.symbol)
