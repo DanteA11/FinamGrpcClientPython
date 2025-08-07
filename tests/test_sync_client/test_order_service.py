@@ -1,3 +1,4 @@
+import threading
 import time
 from random import choice
 
@@ -17,13 +18,15 @@ from finam_grpc_client.grpc.tradeapi.v1.orders.orders_service_pb2 import (
     TimeInForce,
 )
 from finam_grpc_client.grpc.tradeapi.v1.side_pb2 import Side
-from tests.type_checker import TypeChecker
 from finam_grpc_client.types import DataType
+from tests.type_checker import TypeChecker
 
 
 class TestsOrdersService(TypeChecker):
 
     def test_place_cancel_order_buy_limit(self, sync_client, account_id):
+        if not self.check_longable(sync_client, account_id):
+            pytest.skip(f"По {self.symbol} лонг не разрешен")
         place = self.create_limit_order_buy(sync_client, account_id)
         self.check_order_state_type(place)
         assert place.status == OrderStatus.ORDER_STATUS_NEW
@@ -37,19 +40,27 @@ class TestsOrdersService(TypeChecker):
         limit_price = self.get_max_order_book_price(sync_client)
         if not limit_price:
             pytest.skip("Нет цены для выставления заявки")
-        place = sync_client.place_order(
-            account_id,
-            self.symbol,
-            quantity=Decimal(value="1"),
-            side=Side.SIDE_SELL,
-            type=OrderType.ORDER_TYPE_LIMIT,
-            time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
-            limit_price=limit_price,
-            stop_price=None,
-            stop_condition=None,
-            legs=None,
-            client_order_id=None,
-        )
+        try:
+            place = sync_client.place_order(
+                account_id,
+                self.symbol,
+                quantity=Decimal(value="1"),
+                side=Side.SIDE_SELL,
+                type=OrderType.ORDER_TYPE_LIMIT,
+                time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
+                limit_price=limit_price,
+                stop_price=None,
+                stop_condition=None,
+                legs=None,
+                client_order_id=None,
+            )
+        except RpcError as exc:
+            if "Не хватает собственных бумаг" in exc.details():
+                pytest.fail(
+                    "Ошибка в GetAssetParamsResponse. Шорт не разрешен.",
+                    pytrace=False,
+                )
+
         self.check_order_state_type(place)
         assert place.status == OrderStatus.ORDER_STATUS_NEW
         cancel = sync_client.cancel_order(account_id, place.order_id)
@@ -68,7 +79,7 @@ class TestsOrdersService(TypeChecker):
 
     def test_place_cancel_order_sell_stop(self, sync_client, account_id):
         if not self.check_shortable(sync_client, account_id):
-            pytest.skip(f"По {self.symbol} лонг не разрешен")
+            pytest.skip(f"По {self.symbol} шорт не разрешен")
         stop_price = self.get_min_order_book_price(sync_client)
         if not stop_price:
             pytest.skip("Нет цены для выставления заявки")
@@ -240,14 +251,94 @@ class TestsOrdersService(TypeChecker):
 
 
 class TestSubscribe:
-    def test_subscribe_order_limit(self, sync_client, account_id):
+    def test_subscribe_unsubscribe_order_limit(self, sync_client, account_id):
         self.subscribe_order(
             sync_client, account_id, TestsOrdersService.create_limit_order_buy
         )
 
-    def test_subscribe_order_stop(self, sync_client, account_id):
+    def test_subscribe_unsubscribe_order_stop(self, sync_client, account_id):
         self.subscribe_order(
             sync_client, account_id, TestsOrdersService.create_stop_order_by
+        )
+
+    def test_subscribe_unsubscribe_trade_buy_sell(
+        self, sync_client, account_id
+    ):
+        store = []
+        sync_client.subscribe_order_trade(
+            account_id, DataType.DATA_TYPE_TRADES
+        )
+        time.sleep(1)
+        sync_client.on_order_trade = self.on_event(store)
+        buy = self.buy_market(sync_client, account_id)
+        time.sleep(2)
+        sell = self.sell_market(sync_client, account_id)
+        time.sleep(2)
+        sync_client.unsubscribe_order_trade(
+            account_id, DataType.DATA_TYPE_TRADES
+        )
+        assert len(store) == 2
+        assert store[0].trades[0].order_id == buy.order_id
+        assert store[1].trades[0].order_id == sell.order_id
+
+    def test_subscribe_unsubscribe_order_trade_buy_sell(
+        self, sync_client, account_id
+    ):
+        store = []
+        sync_client.subscribe_order_trade(account_id, DataType.DATA_TYPE_ALL)
+        time.sleep(1)
+        sync_client.on_order_trade = self.on_event(store)
+        buy = self.buy_market(sync_client, account_id)
+        time.sleep(2)
+        sell = self.sell_market(sync_client, account_id)
+        time.sleep(2)
+        sync_client.unsubscribe_order_trade(
+            account_id, DataType.DATA_TYPE_TRADES
+        )
+
+        assert len(store) == 6
+        assert store[0].orders[0].order_id == buy.order_id
+        assert store[0].orders[0].status == OrderStatus.ORDER_STATUS_NEW
+        assert store[1].orders[0].order_id == buy.order_id
+        assert store[1].orders[0].status == OrderStatus.ORDER_STATUS_FILLED
+        assert store[2].trades[0].order_id == buy.order_id
+
+        assert store[3].orders[0].order_id == sell.order_id
+        assert store[3].orders[0].status == OrderStatus.ORDER_STATUS_NEW
+        assert store[4].orders[0].order_id == sell.order_id
+        assert store[4].orders[0].status == OrderStatus.ORDER_STATUS_FILLED
+        assert store[5].trades[0].order_id == sell.order_id
+
+    @staticmethod
+    def buy_market(client, acc_id):
+        return client.place_order(
+            acc_id,
+            TestsOrdersService.symbol,
+            quantity=Decimal(value="1"),
+            side=Side.SIDE_BUY,
+            type=OrderType.ORDER_TYPE_MARKET,
+            time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
+            limit_price=None,
+            stop_price=None,
+            stop_condition=None,
+            legs=None,
+            client_order_id=None,
+        )
+
+    @staticmethod
+    def sell_market(client, acc_id):
+        return client.place_order(
+            acc_id,
+            TestsOrdersService.symbol,
+            quantity=Decimal(value="1"),
+            side=Side.SIDE_SELL,
+            type=OrderType.ORDER_TYPE_MARKET,
+            time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
+            limit_price=None,
+            stop_price=None,
+            stop_condition=None,
+            legs=None,
+            client_order_id=None,
         )
 
     @classmethod
@@ -271,8 +362,10 @@ class TestSubscribe:
 
     @staticmethod
     def on_event(store: list):
+        lock = threading.Lock()
 
         def handler(event: OrderTradeResponse):
-            store.append(event)
+            with lock:
+                store.append(event)
 
         return handler

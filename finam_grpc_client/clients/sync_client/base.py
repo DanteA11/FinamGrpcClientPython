@@ -2,7 +2,6 @@ import logging
 import time
 from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 from queue import Queue
 from threading import Event, Lock, Thread
 from typing import Any, Callable

@@ -17,8 +17,8 @@ from finam_grpc_client.grpc.tradeapi.v1.orders.orders_service_pb2 import (
     TimeInForce,
 )
 from finam_grpc_client.grpc.tradeapi.v1.side_pb2 import Side
-from tests.type_checker import TypeChecker
 from finam_grpc_client.types import DataType
+from tests.type_checker import TypeChecker
 
 
 @pytest.mark.anyio
@@ -27,6 +27,8 @@ class TestsOrdersService(TypeChecker):
     async def test_place_cancel_order_buy_limit(
         self, async_client, account_id
     ):
+        if not await self.check_longable(async_client, account_id):
+            pytest.skip(f"По {self.symbol} лонг не разрешен")
         place = await self.create_limit_order_buy(async_client, account_id)
         self.check_order_state_type(place)
         assert place.status == OrderStatus.ORDER_STATUS_NEW
@@ -42,19 +44,27 @@ class TestsOrdersService(TypeChecker):
         limit_price = await self.get_max_order_book_price(async_client)
         if not limit_price:
             pytest.skip("Нет цены для выставления заявки")
-        place = await async_client.place_order(
-            account_id,
-            self.symbol,
-            quantity=Decimal(value="1"),
-            side=Side.SIDE_SELL,
-            type=OrderType.ORDER_TYPE_LIMIT,
-            time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
-            limit_price=limit_price,
-            stop_price=None,
-            stop_condition=None,
-            legs=None,
-            client_order_id=None,
-        )
+        try:
+            place = await async_client.place_order(
+                account_id,
+                self.symbol,
+                quantity=Decimal(value="1"),
+                side=Side.SIDE_SELL,
+                type=OrderType.ORDER_TYPE_LIMIT,
+                time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
+                limit_price=limit_price,
+                stop_price=None,
+                stop_condition=None,
+                legs=None,
+                client_order_id=None,
+            )
+        except AioRpcError as exc:
+            if "Не хватает собственных бумаг" in exc.details():
+                pytest.fail(
+                    "Ошибка в GetAssetParamsResponse. Шорт не разрешен.",
+                    pytrace=False,
+                )
+
         self.check_order_state_type(place)
         assert place.status == OrderStatus.ORDER_STATUS_NEW
         cancel = await async_client.cancel_order(account_id, place.order_id)
@@ -75,7 +85,7 @@ class TestsOrdersService(TypeChecker):
         self, async_client, account_id
     ):
         if not await self.check_shortable(async_client, account_id):
-            pytest.skip(f"По {self.symbol} лонг не разрешен")
+            pytest.skip(f"По {self.symbol} шорт не разрешен")
         stop_price = await self.get_min_order_book_price(async_client)
         if not stop_price:
             pytest.skip("Нет цены для выставления заявки")
@@ -256,15 +266,69 @@ class TestsOrdersService(TypeChecker):
 
 @pytest.mark.anyio
 class TestSubscribe:
-    async def test_subscribe_order_limit(self, async_client, account_id):
+    async def test_subscribe_unsubscribe_order_limit(
+        self, async_client, account_id
+    ):
         await self.subscribe_order(
             async_client, account_id, TestsOrdersService.create_limit_order_buy
         )
 
-    async def test_subscribe_order_stop(self, async_client, account_id):
+    async def test_subscribe_unsubscribe_order_stop(
+        self, async_client, account_id
+    ):
         await self.subscribe_order(
             async_client, account_id, TestsOrdersService.create_stop_order_by
         )
+
+    async def test_subscribe_unsubscribe_trade_buy_sell(
+        self, async_client, account_id
+    ):
+        store = []
+        await async_client.subscribe_order_trade(
+            account_id, DataType.DATA_TYPE_TRADES
+        )
+        await asyncio.sleep(1)
+        async_client.on_order_trade = self.on_event(store)
+        buy = await self.buy_market(async_client, account_id)
+        await asyncio.sleep(2)
+        sell = await self.sell_market(async_client, account_id)
+        await asyncio.sleep(2)
+        await async_client.unsubscribe_order_trade(
+            account_id, DataType.DATA_TYPE_TRADES
+        )
+        assert len(store) == 2
+        assert store[0].trades[0].order_id == buy.order_id
+        assert store[1].trades[0].order_id == sell.order_id
+
+    async def test_subscribe_unsubscribe_order_trade_buy_sell(
+        self, async_client, account_id
+    ):
+        store = []
+        await async_client.subscribe_order_trade(
+            account_id, DataType.DATA_TYPE_ALL
+        )
+        await asyncio.sleep(1)
+        async_client.on_order_trade = self.on_event(store)
+        buy = await self.buy_market(async_client, account_id)
+        await asyncio.sleep(2)
+        sell = await self.sell_market(async_client, account_id)
+        await asyncio.sleep(2)
+        await async_client.unsubscribe_order_trade(
+            account_id, DataType.DATA_TYPE_TRADES
+        )
+
+        assert len(store) == 6
+        assert store[0].orders[0].order_id == buy.order_id
+        assert store[0].orders[0].status == OrderStatus.ORDER_STATUS_NEW
+        assert store[1].orders[0].order_id == buy.order_id
+        assert store[1].orders[0].status == OrderStatus.ORDER_STATUS_FILLED
+        assert store[2].trades[0].order_id == buy.order_id
+
+        assert store[3].orders[0].order_id == sell.order_id
+        assert store[3].orders[0].status == OrderStatus.ORDER_STATUS_NEW
+        assert store[4].orders[0].order_id == sell.order_id
+        assert store[4].orders[0].status == OrderStatus.ORDER_STATUS_FILLED
+        assert store[5].trades[0].order_id == sell.order_id
 
     @classmethod
     async def subscribe_order(cls, client, acc_id, func):
@@ -286,9 +350,43 @@ class TestSubscribe:
             assert order.status == o.status
 
     @staticmethod
+    async def buy_market(client, acc_id):
+        return await client.place_order(
+            acc_id,
+            TestsOrdersService.symbol,
+            quantity=Decimal(value="1"),
+            side=Side.SIDE_BUY,
+            type=OrderType.ORDER_TYPE_MARKET,
+            time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
+            limit_price=None,
+            stop_price=None,
+            stop_condition=None,
+            legs=None,
+            client_order_id=None,
+        )
+
+    @staticmethod
+    async def sell_market(client, acc_id):
+        return await client.place_order(
+            acc_id,
+            TestsOrdersService.symbol,
+            quantity=Decimal(value="1"),
+            side=Side.SIDE_SELL,
+            type=OrderType.ORDER_TYPE_MARKET,
+            time_in_force=TimeInForce.TIME_IN_FORCE_DAY,
+            limit_price=None,
+            stop_price=None,
+            stop_condition=None,
+            legs=None,
+            client_order_id=None,
+        )
+
+    @staticmethod
     def on_event(store: list):
+        lock = asyncio.Lock()
 
         async def handler(event: OrderTradeResponse):
-            store.append(event)
+            async with lock:
+                store.append(event)
 
         return handler
