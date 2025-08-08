@@ -4,7 +4,7 @@ from typing import Generic, TypeVar
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.type.interval_pb2 import Interval
-from grpc import Channel
+from grpc import Channel, RpcError, StatusCode
 from grpc.aio import Channel as AsyncChannel
 
 from finam_grpc_client.grpc.tradeapi.v1.accounts.accounts_service_pb2_grpc import (
@@ -93,6 +93,48 @@ class BaseClient(Generic[_C], ABC):
             return False
         self.__state = State.Stopped
         return True
+
+    @classmethod
+    def _error_handler(cls, exception: RpcError, count: int, request) -> int:
+        """
+        Обработчик ошибок подключения к стримам.
+
+        :param exception: Ошибка при подключении.
+        :param count: Внешний счетчик ошибок.
+        :param request: Информация о запросе.
+
+        :return: Счетчик. Если -1, необходимо выйти из стрима.
+        Если >3 выйти и (опционально) завершить подключение.
+        """
+        match exception.code():
+            case StatusCode.CANCELLED:
+                cls.logger.info("Принудительная отмена подписки %s", request)
+                return -1
+            case (
+                StatusCode.INTERNAL
+                | StatusCode.UNKNOWN
+                | StatusCode.UNAVAILABLE
+            ):
+                count += 1
+                if count > 3:
+                    cls.logger.error(
+                        "Разрыв соединения подписки %s с ошибкой: %s."
+                        "Достигнуто максимальное количество попыток. Соединение разорвано",
+                        request,
+                        exception,
+                    )
+                else:
+                    cls.logger.warning(
+                        "Разрыв соединения подписки %s с ошибкой: %s. Переподключение.",
+                        request,
+                        exception,
+                    )
+                return count
+        cls.logger.error(
+            "При обработке подписки на ордера и сделки произошла ошибка: %s",
+            exception,
+        )
+        return 4
 
     @staticmethod
     def _create_interval(start_time, end_time):

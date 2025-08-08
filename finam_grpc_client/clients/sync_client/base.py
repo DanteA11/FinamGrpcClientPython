@@ -10,7 +10,6 @@ from google.protobuf.message import Message
 from grpc import (
     Call,
     RpcError,
-    StatusCode,
     UnaryStreamMultiCallable,
     UnaryUnaryMultiCallable,
     secure_channel,
@@ -261,32 +260,13 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                         h = worker or getattr(self, handler)
                         self.__background_tasks.submit(h, event)
                 except RpcError as exc:
-                    match exc.code():
-                        case StatusCode.CANCELLED:
-                            self.logger.info(
-                                "Принудительная отмена подписки %s.", request
-                            )
-                            break
-                        case StatusCode.INTERNAL | StatusCode.UNKNOWN:
-                            count += 1
-                            if count > 3:
-                                self.logger.error(
-                                    "Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано",
-                                    request,
-                                )
-                                break
-                            self.logger.warning(
-                                "Разрыв соединения подписки %s с ошибкой: %s. Переподключение.",
-                                request,
-                                exc,
-                            )
-                            continue
-
-                    self.logger.error(
-                        "При обработке подписки на ордера и сделки произошла ошибка: %s",
-                        exc,
+                    count = self._error_handler(
+                        exc, count, "на ордера и сделки"
                     )
-                    break
+                    if count == -1:
+                        break
+                    if count > 3:
+                        break
 
         with self.__lock:
             if key in self.__subscribe_calls:
@@ -348,32 +328,12 @@ class BaseSyncClient(BaseClient, SyncClientInterface, ABC):
                     )
                     self.__background_tasks.submit(self.on_order_trade, event)
             except RpcError as exc:
-                match exc.code():
-                    case StatusCode.CANCELLED:
-                        self.logger.info(
-                            "Принудительная отмена подписки на ордера и сделки."
-                        )
-                        break
-                    case StatusCode.INTERNAL | StatusCode.UNKNOWN:
-                        count += 1
-                        if count > 3:
-                            self.logger.error(
-                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано"
-                            )
-                            self.stop()
-                            break
-                        self.logger.warning(
-                            "Разрыв соединения подписки на ордера и сделки с ошибкой: %s. Переподключение.",
-                            exc,
-                        )
-                        continue
-
-                self.logger.error(
-                    "При обработке подписки на ордера и сделки произошла ошибка: %s",
-                    exc,
-                )
-                self.stop()
-                break
+                count = self._error_handler(exc, count, "на ордера и сделки")
+                if count == -1:
+                    break
+                if count > 3:
+                    self.stop()
+                    break
 
     @staticmethod
     def __execute_request(

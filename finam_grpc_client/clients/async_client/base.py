@@ -7,7 +7,7 @@ from logging import Logger
 from typing import Callable, Coroutine
 
 from google.protobuf.message import Message
-from grpc import StatusCode, ssl_channel_credentials
+from grpc import ssl_channel_credentials
 from grpc.aio import (
     AioRpcError,
     Metadata,
@@ -262,31 +262,13 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
                         self.__background_tasks.add(t)
                         t.add_done_callback(self.__background_tasks.discard)
                 except AioRpcError as exc:
-                    match exc.code():
-                        case StatusCode.CANCELLED:
-                            self.logger.info(
-                                "Принудительная отмена подписки %s", request
-                            )
-                            break
-                        case StatusCode.INTERNAL | StatusCode.UNKNOWN:
-                            count += 1
-                            if count > 3:
-                                self.logger.error(
-                                    "Достигнуто максимальное количество попыток соединения для подписки %s. Соединение разорвано",
-                                    request,
-                                )
-                                break
-                            self.logger.warning(
-                                "Разрыв соединения подписки %s с ошибкой: %s. Переподключение.",
-                                request,
-                                exc,
-                            )
-                            continue
-                    self.logger.error(
-                        "При обработке подписки на ордера и сделки произошла ошибка: %s",
-                        exc,
+                    count = self._error_handler(
+                        exc, count, "на ордера и сделки"
                     )
-                    break
+                    if count == -1:
+                        break
+                    if count > 3:
+                        break
 
         task = asyncio.create_task(subscribe_worker(), name=str(key))
         self.__background_tasks.add(task)
@@ -345,31 +327,12 @@ class BaseAsyncClient(BaseClient, AsyncClientInterface, ABC):
                     self.__background_tasks.add(task)
                     task.add_done_callback(self.__background_tasks.discard)
             except AioRpcError as exc:
-                match exc.code():
-                    case StatusCode.CANCELLED:
-                        self.logger.info(
-                            "Принудительная отмена подписки на ордера и сделки."
-                        )
-                        break
-                    case StatusCode.INTERNAL | StatusCode.UNKNOWN:
-                        count += 1
-                        if count > 3:
-                            self.logger.error(
-                                "Достигнуто максимальное количество попыток соединения для подписки на ордера и сделки. Соединение разорвано"
-                            )
-                            await self.stop()
-                            break
-                        self.logger.warning(
-                            "Разрыв соединения подписки на ордера и сделки с ошибкой: %s. Переподключение.",
-                            exc,
-                        )
-                        continue
-                self.logger.error(
-                    "При обработке подписки на ордера и сделки произошла ошибка: %s",
-                    exc,
-                )
-                await self.stop()
-                break
+                count = self._error_handler(exc, count, "на ордера и сделки")
+                if count == -1:
+                    break
+                if count > 3:
+                    await self.stop()
+                    break
 
     @staticmethod
     async def __execute_request(
