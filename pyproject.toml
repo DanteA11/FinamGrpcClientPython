@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "finam-grpc-client"
+version = "1.0.0"
+description = "Клиенты для взаимодействия с GRPC Api Finam"
+authors = ["DanteA11"]
+license = "LICENSE"
+readme = "README.md"
+packages = [
+    { include = "finam_grpc_client", from = "." },
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+grpcio = "^1.68.1"
+googleapis-common-protos = "^1.70.0"
+protobuf = "^6.31.1"
+types-protobuf = "^6.30.2.20250516"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.10.0"
+isort = "^5.13.2"
+grpc-stubs = "^1.53.0.5"
+mypy-protobuf = "^3.6.0"
+grpcio-tools = "^1.68.1"
+python-dotenv = "^1.1.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 79
+exclude = ".*_pb2.*"
+extend-exclude = ".venv"
+
+[tool.isort]
+profile = "black"
+skip = [
+    ".git", "__pycache__", ".venv", "venv", "proto"
+]
+line_length = 79
