@@ -70,7 +70,7 @@ class AbstractFinamClient[
         self._market_data_stub = None
         self._metrics_stub = None
         self.session_token = None
-        if channel:
+        if not channel:
             return None
         return channel.close()
 

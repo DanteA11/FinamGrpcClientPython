@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 from asyncio import Task, create_task, iscoroutine, sleep
@@ -32,6 +33,7 @@ class FinamClient(
     def __init__(self, secret: str, *, url: str = "api.finam.ru:443"):
         super().__init__(secret, url)
         self.__job: Task | None = None
+        self.__renewal_token_call: UnaryStreamMultiCallable | None = None
 
     async def __aenter__(self):
         await self.start()
@@ -41,6 +43,8 @@ class FinamClient(
         await self.stop()
 
     async def start(self) -> None:
+        if self.started:
+            return
         super().start()
         self.__job = create_task(
             self.__update_token_job(), name="UpdateTokenJob"  # type: ignore
@@ -51,7 +55,14 @@ class FinamClient(
         self.logger.info("FinamClient has started")  # type: ignore
 
     async def stop(self) -> None:
+        if self.stopped:
+            return
         coro = super().stop()
+        if self.__renewal_token_call:  # type: ignore
+            self.__renewal_token_call.cancel()  # type: ignore
+            await self.__job  # type: ignore
+            self.__renewal_token_call = None
+            self.__job = None
         if iscoroutine(coro):
             await coro
         self.logger.info("FinamClient has stopped")  # type: ignore
@@ -72,9 +83,10 @@ class FinamClient(
         self.logger.info("Launching a session token renewal task")
         while self.started:
             try:
-                async for response in self.subscribe_jwt_renewal(
+                self.__renewal_token_call = self.subscribe_jwt_renewal(
                     request=SubscribeJwtRenewalRequest(secret=self.secret)
-                ):
+                )
+                async for response in self.__renewal_token_call:
                     self.session_token = response.token
                     token_details = await self.token_details(
                         request=TokenDetailsRequest(token=response.token)
@@ -88,3 +100,6 @@ class FinamClient(
             except RpcError as e:
                 self.logger.exception(e.details(), exc_info=e)
                 await sleep(10)
+            except asyncio.CancelledError:
+                break
+        self.logger.info("Stopping a session token renewal task")

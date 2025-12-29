@@ -33,6 +33,7 @@ class FinamClient(
     def __init__(self, secret: str, *, url: str = "api.finam.ru:443"):
         super().__init__(secret, url)
         self.__job: Thread | None = None
+        self.__renewal_token_call: UnaryStreamMultiCallable | None = None
 
     def __enter__(self):
         self.start()
@@ -42,6 +43,8 @@ class FinamClient(
         self.stop()
 
     def start(self) -> None:
+        if self.started:
+            return
         super().start()
         self.__job = Thread(
             target=self.__update_token_job,  # type: ignore
@@ -55,7 +58,14 @@ class FinamClient(
         self.logger.info("FinamClient has started")  # type: ignore
 
     def stop(self):
+        if self.stopped:
+            return
         super().stop()
+        if self.__renewal_token_call:  # type: ignore
+            self.__renewal_token_call.cancel()  # type: ignore
+            self.__renewal_token_call = None
+            self.__job.join() # type: ignore
+            self.__job = None
         self.logger.info("FinamClient has stopped")  # type: ignore
 
     @property
@@ -72,9 +82,10 @@ class FinamClient(
         self.logger.info("Launching a session token renewal task")
         while self.started:
             try:
-                for response in self.subscribe_jwt_renewal(
+                self.__renewal_token_call = self.subscribe_jwt_renewal(
                     request=SubscribeJwtRenewalRequest(secret=self.secret)
-                ):
+                )
+                for response in self.__renewal_token_call:
                     self.session_token = response.token
                     token_details = self.token_details(
                         request=TokenDetailsRequest(token=response.token)
@@ -86,5 +97,8 @@ class FinamClient(
                         ).isoformat(),
                     )
             except RpcError as e:
+                if self.stopped:
+                    break
                 self.logger.exception(e.details(), exc_info=e)
                 sleep(10)
+        self.logger.info("Stopping a session token renewal task")
